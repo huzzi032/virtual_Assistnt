@@ -25,8 +25,8 @@ class ZoomOAuthManager:
         # Zoom OAuth credentials from environment
         self.client_id = os.getenv('ZOOM_CLIENT_ID')
         self.client_secret = os.getenv('ZOOM_CLIENT_SECRET')
-        # Always use the correct ngrok callback URL for Zoom OAuth
-        self.redirect_uri = 'https://c9ffd657f669.ngrok-free.app/api/zoom/auth/callback'
+        # Use Azure domain for Zoom OAuth callback
+        self.redirect_uri = 'https://virtual-assistent-cudwb7h9e6avdkfu.eastus-01.azurewebsites.net/api/zoom/auth/callback'
         
         # Zoom API endpoints
         self.auth_base_url = "https://zoom.us/oauth"
