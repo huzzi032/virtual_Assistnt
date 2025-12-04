@@ -56,7 +56,7 @@ async def add_security_headers(request: Request, call_next):
     # Required OWASP security headers for Zoom integration
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["Content-Security-Policy"] = "default-src 'self' 'unsafe-inline' 'unsafe-eval' *.zoom.us *.ngrok.io localhost:*; img-src 'self' data: *.zoom.us; connect-src 'self' *.zoom.us *.ngrok.io localhost:*"
+    response.headers["Content-Security-Policy"] = "default-src 'self' 'unsafe-inline' 'unsafe-eval' *.zoom.us virtual-assistent-cudwb7h9e6avdkfu.eastus-01.azurewebsites.net; img-src 'self' data: *.zoom.us; connect-src 'self' *.zoom.us virtual-assistent-cudwb7h9e6avdkfu.eastus-01.azurewebsites.net"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["X-Frame-Options"] = "ALLOWALL"
     response.headers["Permissions-Policy"] = "microphone=*, camera=*, geolocation=()"

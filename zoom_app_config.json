@@ -1,0 +1,35 @@
+{
+  "servers": [
+    {
+      "url": "https://virtual-assistent-cudwb7h9e6avdkfu.eastus-01.azurewebsites.net",
+      "description": "Production server"
+    }
+  ],
+  "info": {
+    "title": "Voice Assistant Backend API",
+    "version": "1.0.0",
+    "description": "AI-powered voice assistant with Zoom integration"
+  },
+  "paths": {
+    "/api/zoom/auth/callback": {
+      "get": {
+        "summary": "Zoom OAuth callback",
+        "responses": {
+          "200": {
+            "description": "OAuth callback processed"
+          }
+        }
+      }
+    },
+    "/webhooks/zoom": {
+      "post": {
+        "summary": "Zoom webhook events",
+        "responses": {
+          "200": {
+            "description": "Webhook processed"
+          }
+        }
+      }
+    }
+  }
+}
