@@ -23,7 +23,7 @@ class ZoomWebhookHandler:
         
         # Zoom webhook configuration
         self.webhook_secret = os.getenv('ZOOM_WEBHOOK_SECRET')
-        self.verification_token = os.getenv('ZOOM_VERIFICATION_TOKEN')
+        self.verification_token = os.getenv('ZOOM_WEBHOOK_SECRET')  # Use same secret for verification
         
         # Database for storing webhook events
         self.db_path = "database.db"
