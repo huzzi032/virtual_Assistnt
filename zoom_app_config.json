@@ -1,35 +1,359 @@
 {
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Voice Assistant with Zoom Integration API",
+    "description": "Complete API specification for voice assistant server with Zoom OAuth, webhooks, meeting detection, and audio processing integration",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Virtual Assistant Zoom Integration",
+      "url": "https://virtual-assistent-cudwb7h9e6avdkfu.eastus-01.azurewebsites.net",
+      "email": "huzaifachaduhary@gmail.com"
+    },
+    "license": {
+      "name": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
+    }
+  },
   "servers": [
     {
       "url": "https://virtual-assistent-cudwb7h9e6avdkfu.eastus-01.azurewebsites.net",
       "description": "Production server"
     }
   ],
-  "info": {
-    "title": "Voice Assistant Backend API",
-    "version": "1.0.0",
-    "description": "AI-powered voice assistant with Zoom integration"
-  },
   "paths": {
-    "/api/zoom/auth/callback": {
+    "/api/health": {
       "get": {
-        "summary": "Zoom OAuth callback",
+        "summary": "Health Check",
+        "description": "Check if the server is running and healthy",
+        "operationId": "healthCheck",
+        "tags": ["Health"],
         "responses": {
           "200": {
-            "description": "OAuth callback processed"
+            "description": "Server is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "number"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/zoom/auth/url": {
+      "get": {
+        "summary": "Get Zoom OAuth URL",
+        "description": "Get Zoom OAuth authorization URL",
+        "operationId": "getZoomAuthUrl",
+        "tags": ["Zoom Authentication"],
+        "responses": {
+          "200": {
+            "description": "Authorization URL generated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthUrlResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/zoom/auth/status": {
+      "get": {
+        "summary": "Check Zoom Auth Status",
+        "description": "Check if Zoom is authenticated",
+        "operationId": "checkZoomAuthStatus",
+        "tags": ["Zoom Authentication"],
+        "responses": {
+          "200": {
+            "description": "Authentication status retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthStatusResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/zoom/auth/callback": {
+      "get": {
+        "summary": "Zoom OAuth Callback",
+        "description": "Handle Zoom OAuth redirect callback",
+        "operationId": "zoomOAuthCallback",
+        "tags": ["Zoom Authentication"],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Authorization code from Zoom"
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "State parameter for security"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OAuth callback processed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/zoom/meetings/detect": {
+      "post": {
+        "summary": "Detect Zoom Meetings",
+        "description": "Detect and process Zoom meeting URLs in text",
+        "operationId": "detectZoomMeetings",
+        "tags": ["Zoom Meetings"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DetectMeetingsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Meeting detection completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetectMeetingsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/zoom/meetings/recent": {
+      "get": {
+        "summary": "Get Recent Zoom Meetings",
+        "description": "Get recently detected/accessed Zoom meetings",
+        "operationId": "getRecentZoomMeetings",
+        "tags": ["Zoom Meetings"],
+        "responses": {
+          "200": {
+            "description": "Recent meetings retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecentMeetingsResponse"
+                }
+              }
+            }
           }
         }
       }
     },
     "/webhooks/zoom": {
       "post": {
-        "summary": "Zoom webhook events",
+        "summary": "Zoom Webhook Handler",
+        "description": "Handle Zoom webhook events (meeting started/ended, participants, recording)",
+        "operationId": "zoomWebhookHandler",
+        "tags": ["Zoom Webhooks"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ZoomWebhookEvent"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "Webhook processed"
+            "description": "Webhook processed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
           }
         }
       }
     }
-  }
+  },
+  "components": {
+    "schemas": {
+      "AuthUrlResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "authorization_url": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          }
+        }
+      },
+      "AuthStatusResponse": {
+        "type": "object",
+        "properties": {
+          "authenticated": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "DetectMeetingsRequest": {
+        "type": "object",
+        "required": ["text"],
+        "properties": {
+          "text": {
+            "type": "string"
+          }
+        }
+      },
+      "DetectMeetingsResponse": {
+        "type": "object",
+        "properties": {
+          "meetings_detected": {
+            "type": "boolean"
+          },
+          "meetings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ZoomMeeting"
+            }
+          }
+        }
+      },
+      "RecentMeetingsResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "meetings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ZoomMeeting"
+            }
+          },
+          "count": {
+            "type": "integer"
+          }
+        }
+      },
+      "ZoomMeeting": {
+        "type": "object",
+        "properties": {
+          "meeting_id": {
+            "type": "string"
+          },
+          "meeting_uuid": {
+            "type": "string"
+          },
+          "topic": {
+            "type": "string"
+          },
+          "join_url": {
+            "type": "string"
+          }
+        }
+      },
+      "ZoomWebhookEvent": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "enum": ["meeting.started", "meeting.ended", "meeting.participant_joined", "meeting.participant_left", "recording.started", "recording.stopped"]
+          },
+          "payload": {
+            "type": "object",
+            "properties": {
+              "account_id": {
+                "type": "string"
+              },
+              "object": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "uuid": {
+                    "type": "string"
+                  },
+                  "topic": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "SuccessResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Health",
+      "description": "Server health and status endpoints"
+    },
+    {
+      "name": "Zoom Authentication",
+      "description": "Zoom OAuth authentication endpoints"
+    },
+    {
+      "name": "Zoom Meetings",
+      "description": "Zoom meeting detection and management"
+    },
+    {
+      "name": "Zoom Webhooks",
+      "description": "Zoom webhook event handling"
+    }
+  ]
 }

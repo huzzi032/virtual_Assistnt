@@ -8,7 +8,7 @@ import wave
 import time
 import sys
 import signal
-from mcp.server.fastmcp import FastMCP  
+from fastmcp import FastMCP
 from fastapi import FastAPI, Request, UploadFile, File, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse
@@ -32,6 +32,7 @@ from tools.zoom_meeting_tool import detect_zoom_meetings, parse_zoom_meeting_url
 # Load environment variables
 load_dotenv()
 
+# Initialize FastMCP server
 server = FastMCP("voice_agent_server")
 
 # Create FastAPI app with large file support for 2+ hour audio
@@ -1671,6 +1672,15 @@ if __name__ == "__main__":
     while restart_count < max_restarts:
         try:
             print(f"🚀 Initializing HTTP Voice Assistant server (attempt {restart_count + 1}/{max_restarts})...")
+            # Initialize FastMCP tools
+            server.tool()(process_voice)
+            server.tool()(speech_to_text_tool)
+            server.tool()(todo_manager)
+            server.tool()(notifier)
+            server.tool()(extract_action_tasks)
+            server.tool()(extract_and_process_todos)
+            server.tool()(handle_calendar_request)
+            
             asyncio.run(main())
             # If we get here, server stopped normally
             break
