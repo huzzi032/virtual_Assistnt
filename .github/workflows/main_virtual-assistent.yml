@@ -63,4 +63,4 @@ jobs:
         with:
           app-name: 'Virtual-Assistent'
           slot-name: 'Production'
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_8C317DCC353A4198AA93A0990853A39D }}
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_091A812BFEC4495E8AE830D2512AB932 }}
