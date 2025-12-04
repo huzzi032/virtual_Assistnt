@@ -119,8 +119,8 @@ class ZoomOAuthManager:
             'state': state
         }
         
-        # Use the Zoom connector authorization URL for this app
-        authorization_url = "https://integrations.zoom.us/connectors/oauth/7Ua1f1h_SiGDCn1gYfJqAQ/bef_authorization?call_back_url=https://zoom.us/oauth/authorize?response_type%3Dcode%26client_id%3DflT_XwaFTVmfkzlW4AkeQ%26redirect_uri%3Dhttps://c9ffd657f669.ngrok-free.app/api/zoom/auth/callback"
+        # Build the standard Zoom OAuth authorization URL
+        authorization_url = f"{self.auth_base_url}/authorize?" + "&".join([f"{k}={v}" for k, v in auth_params.items()])
         
         print(f"🔗 Generated Zoom auth URL with state: {state[:10]}...")
         
