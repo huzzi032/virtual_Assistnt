@@ -1,3 +1,4 @@
+# Voice Assistant Backend Dependencies - Compatible with FastMCP 2.13.3
 fastapi==0.115.5
 uvicorn[standard]>=0.35.0
 python-dotenv>=1.1.0
