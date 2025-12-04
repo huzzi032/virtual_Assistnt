@@ -10,4 +10,4 @@ pip install -r requirements.txt
 
 # Start FastAPI with uvicorn  
 echo "🌐 Running server on port $PORT..."
-python -m uvicorn main:app --host 0.0.0.0 --port $PORT
+python -m uvicorn server.mcp_server:app --host 0.0.0.0 --port $PORT
