@@ -236,10 +236,10 @@ class GPT4oHTTPSTT:
                     if len(audio_data) > 1024 * 1024:  # > 1MB (~30+ seconds)
                         data.add_field('chunking_strategy', 'auto')
                     
-                    # Correct headers for Azure OpenAI multipart upload - using api-key header
+                    # Correct headers for Azure Cognitive Services - using Ocp-Apim-Subscription-Key
                     # Note: Don't set Content-Type manually for multipart - aiohttp handles it
                     headers = {
-                        "api-key": self.api_key,
+                        "Ocp-Apim-Subscription-Key": self.api_key,
                         "Accept": "application/json"
                     }
                     
