@@ -283,9 +283,9 @@ async def test_stt_endpoint():
     🧪 Test endpoint to check STT system status
     """
     try:
-        from server.tools.stt_tool import GPT4oHTTPSTT
+        from server.tools.stt_tool import get_gpt4o_stt
         
-        tool = GPT4oHTTPSTT()
+        tool = get_gpt4o_stt()
         
         return JSONResponse({
             "success": True,

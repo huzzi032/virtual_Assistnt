@@ -499,8 +499,8 @@ async def process_diarized_audio_for_mcp(audio_file_path: str) -> Dict:
         try:
             print("🎙️ Step 1: Getting basic transcription with Azure GPT-4o...")
             # Use simple STT tool for reliable basic transcription
-            from .stt_tool import GPT4oHTTPSTT
-            stt_tool = GPT4oHTTPSTT()
+            from .stt_tool import get_gpt4o_stt
+            stt_tool = get_gpt4o_stt()
             with open(audio_file_path, 'rb') as audio_file:
                 audio_data = audio_file.read()
             basic_transcript = await stt_tool.transcribe_audio(audio_data)
