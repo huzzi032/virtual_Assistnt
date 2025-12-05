@@ -25,7 +25,8 @@ class ZoomOAuthManager:
         # Zoom OAuth credentials from environment
         self.client_id = os.getenv('ZOOM_CLIENT_ID')
         self.client_secret = os.getenv('ZOOM_CLIENT_SECRET')
-        # Use Azure domain for Zoom OAuth callback
+        # Use Zoom Connector OAuth flow
+        self.connector_auth_url = 'https://integrations.zoom.us/connectors/oauth/KSrs7u0yQXihzRv_qi0ACg/bef_authorization'
         self.redirect_uri = 'https://virtual-assistent-cudwb7h9e6avdkfu.eastus-01.azurewebsites.net/api/zoom/auth/callback'
         
         # Zoom API endpoints
@@ -98,7 +99,7 @@ class ZoomOAuthManager:
             print(f"❌ Database initialization error: {e}")
 
     def get_authorization_url(self, state: str | None = None) -> dict:
-        """Generate Zoom OAuth authorization URL"""
+        """Generate Zoom Connector OAuth authorization URL"""
         
         if not self.client_id:
             return {
@@ -110,8 +111,8 @@ class ZoomOAuthManager:
         if not state:
             state = secrets.token_urlsafe(32)
         
-        # Build authorization parameters
-        auth_params = {
+        # Build standard OAuth parameters for the callback URL
+        oauth_params = {
             'response_type': 'code',
             'client_id': self.client_id,
             'redirect_uri': self.redirect_uri,
@@ -119,10 +120,18 @@ class ZoomOAuthManager:
             'state': state
         }
         
-        # Build the standard Zoom OAuth authorization URL
-        authorization_url = f"{self.auth_base_url}/authorize?" + "&".join([f"{k}={v}" for k, v in auth_params.items()])
+        # Create the standard OAuth URL that will be used as callback
+        oauth_callback_url = f"{self.auth_base_url}/authorize?" + urlencode(oauth_params)
         
-        print(f"🔗 Generated Zoom auth URL with state: {state[:10]}...")
+        # Build the Zoom Connector authorization URL with the callback
+        connector_params = {
+            'call_back_url': oauth_callback_url
+        }
+        
+        # Final Zoom Connector authorization URL
+        authorization_url = f"{self.connector_auth_url}?" + urlencode(connector_params)
+        
+        print(f"🔗 Generated Zoom Connector auth URL with state: {state[:10]}...")
         
         return {
             "success": True,
