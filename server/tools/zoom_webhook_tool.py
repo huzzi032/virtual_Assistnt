@@ -31,7 +31,7 @@ class ZoomWebhookHandler:
         
         print(f"🎣 Zoom Webhook Handler initialized")
         print(f"   Secret configured: {'✅' if self.webhook_secret else '❌ Missing ZOOM_SECRET_TOKEN'}")
-        print(f"   Verification token: {'✅' if self.verification_token else '❌ Missing ZOOM_VERIFICATION_TOKEN'}")
+        print(f"   Verification token: {'✅' if self.verification_token else '❌ Missing ZOOM_SECRET_TOKEN'}")
 
     def _init_database(self):
         """Initialize database table for webhook events"""
