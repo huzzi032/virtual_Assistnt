@@ -351,8 +351,8 @@ async def speech_to_text_from_audio(audio_data: bytes) -> str:
     try:
         print(f"📝 Starting GPT-4o STT processing: {len(audio_data)} bytes ({len(audio_data)/1024/1024:.2f}MB)")
         
-        # Initialize STT tool
-        stt_tool = GPT4oHTTPSTT()
+        # Initialize STT tool using lazy initialization
+        stt_tool = get_gpt4o_stt()
         
         # Step 1: Validate audio size
         size_valid, size_message = stt_tool.validate_audio_requirements(audio_data)
@@ -421,7 +421,16 @@ async def speech_to_text_from_audio(audio_data: bytes) -> str:
         print(f"📋 Full traceback:\n{traceback.format_exc()}")
         return f"Speech recognition failed: {str(e)}. Please try recording again."
 
+# Lazy initialization - only create when needed
+gpt4o_stt = None
+
+def get_gpt4o_stt():
+    """Get or create GPT4o STT instance"""
+    global gpt4o_stt
+    if gpt4o_stt is None:
+        gpt4o_stt = GPT4oHTTPSTT()
+    return gpt4o_stt
+
 # Backward compatibility
-gpt4o_stt = GPT4oHTTPSTT()
-gpt4o_websocket_stt = gpt4o_stt
+gpt4o_websocket_stt = get_gpt4o_stt
 

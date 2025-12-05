@@ -15,6 +15,9 @@ from fastapi.responses import JSONResponse, HTMLResponse
 import uvicorn
 from dotenv import load_dotenv
 
+# Load environment variables FIRST before importing tools
+load_dotenv()
+
 # Import tools with proper path handling
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, current_dir)
@@ -28,9 +31,6 @@ from tools.todo_tool import extract_and_process_todos, todo_manager
 from tools.zoom_oauth_tool import get_zoom_auth_url, handle_zoom_oauth_callback, get_zoom_access_token, is_zoom_authenticated
 from tools.zoom_webhook_tool import zoom_webhook_handler
 from tools.zoom_meeting_tool import detect_zoom_meetings, parse_zoom_meeting_url, process_text_for_zoom_meetings, get_recent_zoom_meetings
-
-# Load environment variables
-load_dotenv()
 
 # Initialize FastMCP server
 server = FastMCP("voice_agent_server")
