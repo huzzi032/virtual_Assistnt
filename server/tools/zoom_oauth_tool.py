@@ -32,8 +32,9 @@ class ZoomOAuthManager:
         self.auth_base_url = "https://zoom.us/oauth"
         self.api_base_url = "https://api.zoom.us/v2"
         
-        # OAuth scopes - using empty/minimal for basic access
-        self.scopes = []  # No scopes - just basic authentication
+        # OAuth scopes - let user configure in Zoom app
+        # Users can manually select scopes in their Zoom Marketplace app
+        self.scopes = []  # Empty - user controls scopes in Zoom app settings
         
         # Database connection for storing tokens
         self.db_path = "database.db"
@@ -108,9 +109,12 @@ class ZoomOAuthManager:
             'response_type': 'code',
             'client_id': self.client_id,
             'redirect_uri': self.redirect_uri,
-            'scope': ' '.join(self.scopes),
             'state': state
         }
+        
+        # Only add scope if user has configured scopes
+        if self.scopes:
+            oauth_params['scope'] = ' '.join(self.scopes)
         
         # Create the standard Zoom OAuth URL
         authorization_url = f"{self.auth_base_url}/authorize?" + urlencode(oauth_params)
