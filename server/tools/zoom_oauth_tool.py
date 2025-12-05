@@ -149,11 +149,11 @@ class ZoomOAuthManager:
                 "error": "Zoom OAuth credentials not configured"
             }
         
-        # Prepare token exchange request for Zoom connector
-        token_url = "https://integrations.zoom.us/connectors/oauth/7Ua1f1h_SiGDCn1gYfJqAQ/token"
+        # Use standard Zoom OAuth token exchange endpoint
+        token_url = "https://zoom.us/oauth/token"
         
         headers = {
-            "Content-Type": "application/json"
+            "Content-Type": "application/x-www-form-urlencoded"
         }
         
         data = {
@@ -166,9 +166,12 @@ class ZoomOAuthManager:
         
         try:
             print(f"🔄 Exchanging code for Zoom tokens...")
+            print(f"   Token URL: {token_url}")
+            print(f"   Client ID: {self.client_id}")
+            print(f"   Redirect URI: {self.redirect_uri}")
             
             async with aiohttp.ClientSession() as session:
-                async with session.post(token_url, headers=headers, json=data) as response:
+                async with session.post(token_url, headers=headers, data=data) as response:
                     
                     if response.status == 200:
                         tokens = await response.json()
