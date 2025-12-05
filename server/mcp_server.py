@@ -12,6 +12,7 @@ from fastmcp import FastMCP
 from fastapi import FastAPI, Request, UploadFile, File, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 import uvicorn
 from dotenv import load_dotenv
 
@@ -48,6 +49,25 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount static files for legal pages
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Legal and support pages
+@app.get("/privacy-policy", response_class=HTMLResponse)
+async def privacy_policy():
+    with open("static/privacy-policy.html", "r", encoding="utf-8") as f:
+        return HTMLResponse(content=f.read(), status_code=200)
+
+@app.get("/terms-of-use", response_class=HTMLResponse) 
+async def terms_of_use():
+    with open("static/terms-of-use.html", "r", encoding="utf-8") as f:
+        return HTMLResponse(content=f.read(), status_code=200)
+
+@app.get("/support", response_class=HTMLResponse)
+async def support():
+    with open("static/support.html", "r", encoding="utf-8") as f:
+        return HTMLResponse(content=f.read(), status_code=200)
 
 # Add security headers middleware for OWASP compliance
 @app.middleware("http")
