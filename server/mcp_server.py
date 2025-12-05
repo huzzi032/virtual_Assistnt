@@ -1672,7 +1672,7 @@ if __name__ == "__main__":
             print("\n🔑 Environment variables needed for Zoom:")
             print("   ZOOM_CLIENT_ID - Your Zoom app client ID")
             print("   ZOOM_CLIENT_SECRET - Your Zoom app client secret")
-            print("   ZOOM_WEBHOOK_SECRET - Your Zoom webhook verification token")
+            print("   ZOOM_SECRET_TOKEN - Your Zoom webhook verification token")
 
             # Start periodic email task
             email_task = asyncio.create_task(send_periodic_email())

@@ -22,15 +22,15 @@ class ZoomWebhookHandler:
         """Initialize Zoom webhook handler"""
         
         # Zoom webhook configuration
-        self.webhook_secret = os.getenv('ZOOM_WEBHOOK_SECRET')
-        self.verification_token = os.getenv('ZOOM_WEBHOOK_SECRET')  # Use same secret for verification
+        self.webhook_secret = os.getenv('ZOOM_SECRET_TOKEN')
+        self.verification_token = os.getenv('ZOOM_SECRET_TOKEN')  # Use same secret for verification
         
         # Database for storing webhook events
         self.db_path = "database.db"
         self._init_database()
         
         print(f"🎣 Zoom Webhook Handler initialized")
-        print(f"   Secret configured: {'✅' if self.webhook_secret else '❌ Missing ZOOM_WEBHOOK_SECRET'}")
+        print(f"   Secret configured: {'✅' if self.webhook_secret else '❌ Missing ZOOM_SECRET_TOKEN'}")
         print(f"   Verification token: {'✅' if self.verification_token else '❌ Missing ZOOM_VERIFICATION_TOKEN'}")
 
     def _init_database(self):
