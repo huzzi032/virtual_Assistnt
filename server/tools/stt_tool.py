@@ -14,11 +14,15 @@ load_dotenv()
 
 class GPT4oHTTPSTT:
     def __init__(self):
-        # Azure OpenAI configuration - Fixed URL construction
-        self.endpoint = "https://iarshad-3836-resource.cognitiveservices.azure.com"
-        self.deployment = "gpt-4o-transcribe-diarize"
-        self.api_version = "2025-03-01-preview"  # Match your working curl command
-        self.api_key = os.getenv('AZURE_OPENAI_API_KEY', '')
+        # Azure OpenAI configuration - Use GPT4O environment variables
+        self.endpoint = os.getenv('GPT4O_TRANSCRIBE_ENDPOINT', 'https://iarshad-3836-resource.cognitiveservices.azure.com')
+        self.deployment = os.getenv('GPT4O_DEPLOYMENT_NAME', 'gpt-4o-transcribe-diarize')
+        self.api_version = os.getenv('GPT4O_API_VERSION', '2025-03-01-preview')
+        self.api_key = os.getenv('GPT4O_API_KEY', '')
+        
+        # Validate API key
+        if not self.api_key:
+            raise ValueError("❌ GPT4O_API_KEY not found in environment variables")
         
         # Build complete URL with proper formatting
         self.url = f"{self.endpoint}/openai/deployments/{self.deployment}/audio/transcriptions?api-version={self.api_version}"
@@ -232,10 +236,10 @@ class GPT4oHTTPSTT:
                     if len(audio_data) > 1024 * 1024:  # > 1MB (~30+ seconds)
                         data.add_field('chunking_strategy', 'auto')
                     
-                    # Correct headers for Azure OpenAI multipart upload - using Bearer auth
+                    # Correct headers for Azure OpenAI multipart upload - using api-key header
                     # Note: Don't set Content-Type manually for multipart - aiohttp handles it
                     headers = {
-                        "Authorization": f"Bearer {self.api_key}",
+                        "api-key": self.api_key,
                         "Accept": "application/json"
                     }
                     
