@@ -32,15 +32,8 @@ class ZoomOAuthManager:
         self.auth_base_url = "https://zoom.us/oauth"
         self.api_base_url = "https://api.zoom.us/v2"
         
-        # OAuth scopes for meeting access and real-time features
-        self.scopes = [
-            'meeting:read',           # Read meeting info
-            'meeting:write',          # Create/modify meetings
-            'webinar:read',           # Read webinar info  
-            'recording:read',         # Access recordings
-            'meeting:master',         # Meeting management
-            'user:read'               # Basic user info
-        ]
+        # OAuth scopes - using empty/minimal for basic access
+        self.scopes = []  # No scopes - just basic authentication
         
         # Database connection for storing tokens
         self.db_path = "database.db"
