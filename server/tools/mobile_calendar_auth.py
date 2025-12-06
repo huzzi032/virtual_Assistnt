@@ -27,7 +27,7 @@ class MobileCalendarAuth:
             flow = Flow.from_client_secrets_file(
                 self.credentials_file, 
                 scopes=SCOPES,
-                redirect_uri="https://virtual-assistent-cudwb7h9e6avdkfu.eastus-01.azurewebsites.net/oauth/callback"
+                redirect_uri="http://localhost:8000/oauth/callback"
             )
             
             authorization_url, state = flow.authorization_url(
@@ -43,7 +43,7 @@ class MobileCalendarAuth:
             flow_data = {
                 'client_secrets': client_secrets,
                 'scopes': SCOPES,
-                'redirect_uri': "https://virtual-assistent-cudwb7h9e6avdkfu.eastus-01.azurewebsites.net/oauth/callback",
+                'redirect_uri': "http://localhost:8000/oauth/callback",
                 'state': state
             }
             

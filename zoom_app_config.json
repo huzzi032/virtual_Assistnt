@@ -1,82 +1,19 @@
 {
-  "openapi": "3.0.0",
-  "info": {
-    "title": "Virtual Assistant Zoom Integration",
-    "description": "Voice assistant with Zoom OAuth integration",
-    "version": "1.0.0"
+  "name": "Virtual Assistant Zoom Integration",
+  "description": "Voice assistant with Zoom OAuth integration",
+  "version": "1.0.0",
+  "base_url": "https://virtual-assistent-cudwb7h9e6avdkfu.eastus-01.azurewebsites.net",
+  "endpoints": {
+    "auth_url": "https://virtual-assistent-cudwb7h9e6avdkfu.eastus-01.azurewebsites.net/api/zoom/auth/url",
+    "auth_status": "https://virtual-assistent-cudwb7h9e6avdkfu.eastus-01.azurewebsites.net/api/zoom/auth/status",
+    "auth_callback": "https://virtual-assistent-cudwb7h9e6avdkfu.eastus-01.azurewebsites.net/api/zoom/auth/callback",
+    "meeting_detect": "https://virtual-assistent-cudwb7h9e6avdkfu.eastus-01.azurewebsites.net/api/zoom/meetings/detect",
+    "meetings_recent": "https://virtual-assistent-cudwb7h9e6avdkfu.eastus-01.azurewebsites.net/api/zoom/meetings/recent",
+    "webhook": "https://virtual-assistent-cudwb7h9e6avdkfu.eastus-01.azurewebsites.net/webhooks/zoom"
   },
-  "servers": [
-    {
-      "url": "https://virtual-assistent-cudwb7h9e6avdkfu.eastus-01.azurewebsites.net",
-      "description": "Production Azure server"
-    }
-  ],
-  "paths": {
-    "/api/zoom/auth/url": {
-      "get": {
-        "summary": "Get Zoom OAuth URL",
-        "operationId": "getZoomAuthUrl",
-        "responses": {
-          "200": {
-            "description": "Success"
-          }
-        }
-      }
-    },
-    "/api/zoom/auth/status": {
-      "get": {
-        "summary": "Check Zoom Auth Status", 
-        "operationId": "checkZoomAuthStatus",
-        "responses": {
-          "200": {
-            "description": "Success"
-          }
-        }
-      }
-    },
-    "/api/zoom/auth/callback": {
-      "get": {
-        "summary": "Zoom OAuth Callback",
-        "operationId": "zoomOAuthCallback",
-        "responses": {
-          "200": {
-            "description": "Success"
-          }
-        }
-      }
-    },
-    "/api/zoom/meetings/detect": {
-      "post": {
-        "summary": "Detect Zoom Meetings",
-        "operationId": "detectZoomMeetings", 
-        "responses": {
-          "200": {
-            "description": "Success"
-          }
-        }
-      }
-    },
-    "/api/zoom/meetings/recent": {
-      "get": {
-        "summary": "Get Recent Zoom Meetings",
-        "operationId": "getRecentZoomMeetings",
-        "responses": {
-          "200": {
-            "description": "Success"
-          }
-        }
-      }
-    },
-    "/webhooks/zoom": {
-      "post": {
-        "summary": "Zoom Webhook Handler",
-        "operationId": "zoomWebhookHandler",
-        "responses": {
-          "200": {
-            "description": "Success"
-          }
-        }
-      }
-    }
+  "oauth": {
+    "client_id": "YWv5EIawSiCTcdFfH4L0rQ",
+    "redirect_uri": "https://virtual-assistent-cudwb7h9e6avdkfu.eastus-01.azurewebsites.net/api/zoom/auth/callback",
+    "scopes": ["meeting:read", "meeting:write", "webinar:read", "recording:read", "meeting:master", "user:read"]
   }
 }

@@ -25,16 +25,23 @@ class ZoomOAuthManager:
         # Zoom OAuth credentials from environment
         self.client_id = os.getenv('ZOOM_CLIENT_ID')
         self.client_secret = os.getenv('ZOOM_CLIENT_SECRET')
-        # Use standard Zoom OAuth flow (not Connector)
+        # Use Zoom Connector OAuth flow
+        self.connector_auth_url = 'https://integrations.zoom.us/connectors/oauth/KSrs7u0yQXihzRv_qi0ACg/bef_authorization'
         self.redirect_uri = 'https://virtual-assistent-cudwb7h9e6avdkfu.eastus-01.azurewebsites.net/api/zoom/auth/callback'
         
         # Zoom API endpoints
         self.auth_base_url = "https://zoom.us/oauth"
         self.api_base_url = "https://api.zoom.us/v2"
         
-        # OAuth scopes - let user configure in Zoom app
-        # Users can manually select scopes in their Zoom Marketplace app
-        self.scopes = []  # Empty - user controls scopes in Zoom app settings
+        # OAuth scopes for meeting access and real-time features
+        self.scopes = [
+            'meeting:read',           # Read meeting info
+            'meeting:write',          # Create/modify meetings
+            'webinar:read',           # Read webinar info  
+            'recording:read',         # Access recordings
+            'meeting:master',         # Meeting management
+            'user:read'               # Basic user info
+        ]
         
         # Database connection for storing tokens
         self.db_path = "database.db"
@@ -92,7 +99,7 @@ class ZoomOAuthManager:
             print(f"❌ Database initialization error: {e}")
 
     def get_authorization_url(self, state: str | None = None) -> dict:
-        """Generate standard Zoom OAuth authorization URL"""
+        """Generate Zoom Connector OAuth authorization URL"""
         
         if not self.client_id:
             return {
@@ -104,22 +111,27 @@ class ZoomOAuthManager:
         if not state:
             state = secrets.token_urlsafe(32)
         
-        # Build standard OAuth parameters
+        # Build standard OAuth parameters for the callback URL
         oauth_params = {
             'response_type': 'code',
             'client_id': self.client_id,
             'redirect_uri': self.redirect_uri,
+            'scope': ' '.join(self.scopes),
             'state': state
         }
         
-        # Only add scope if user has configured scopes
-        if self.scopes:
-            oauth_params['scope'] = ' '.join(self.scopes)
+        # Create the standard OAuth URL that will be used as callback
+        oauth_callback_url = f"{self.auth_base_url}/authorize?" + urlencode(oauth_params)
         
-        # Create the standard Zoom OAuth URL
-        authorization_url = f"{self.auth_base_url}/authorize?" + urlencode(oauth_params)
+        # Build the Zoom Connector authorization URL with the callback
+        connector_params = {
+            'call_back_url': oauth_callback_url
+        }
         
-        print(f"🔗 Generated standard Zoom OAuth URL with state: {state[:10]}...")
+        # Final Zoom Connector authorization URL
+        authorization_url = f"{self.connector_auth_url}?" + urlencode(connector_params)
+        
+        print(f"🔗 Generated Zoom Connector auth URL with state: {state[:10]}...")
         
         return {
             "success": True,
@@ -137,11 +149,11 @@ class ZoomOAuthManager:
                 "error": "Zoom OAuth credentials not configured"
             }
         
-        # Use standard Zoom OAuth token exchange endpoint
-        token_url = "https://zoom.us/oauth/token"
+        # Prepare token exchange request for Zoom connector
+        token_url = "https://integrations.zoom.us/connectors/oauth/7Ua1f1h_SiGDCn1gYfJqAQ/token"
         
         headers = {
-            "Content-Type": "application/x-www-form-urlencoded"
+            "Content-Type": "application/json"
         }
         
         data = {
@@ -154,12 +166,9 @@ class ZoomOAuthManager:
         
         try:
             print(f"🔄 Exchanging code for Zoom tokens...")
-            print(f"   Token URL: {token_url}")
-            print(f"   Client ID: {self.client_id}")
-            print(f"   Redirect URI: {self.redirect_uri}")
             
             async with aiohttp.ClientSession() as session:
-                async with session.post(token_url, headers=headers, data=data) as response:
+                async with session.post(token_url, headers=headers, json=data) as response:
                     
                     if response.status == 200:
                         tokens = await response.json()

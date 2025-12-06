@@ -230,12 +230,10 @@ class ZoomMeetingManager:
         if not zoom_urls:
             return {
                 "meetings_detected": False,
-                "meetings": [],
-                "message": "No Zoom meeting URLs detected in text"
+                "meetings": []
             }
         
         detected_meetings = []
-        oauth_required = False
         
         for url in zoom_urls:
             # Parse URL
@@ -244,50 +242,29 @@ class ZoomMeetingManager:
             if url_info.get('is_valid') and url_info.get('meeting_id'):
                 meeting_id = url_info['meeting_id']
                 
-                # Try to get meeting details from API (requires OAuth)
+                # Get meeting details from API
                 meeting_details = await self.get_meeting_info(meeting_id)
                 
-                # Always include basic URL info
+                # Combine URL info with API details
                 combined_info = {
                     **url_info,
-                    "detected_from_url": url,
-                    "recording_ready": False
+                    **meeting_details,
+                    "detected_from_url": url
                 }
-                
-                if meeting_details.get('success'):
-                    # OAuth is working, add full meeting details
-                    combined_info.update(meeting_details)
-                    combined_info["recording_ready"] = True
-                    combined_info["message"] = "Meeting detected and ready for recording"
-                else:
-                    # OAuth not complete, but still provide basic info
-                    oauth_required = True
-                    combined_info.update({
-                        "success": True,  # URL parsing was successful
-                        "topic": f"Meeting {meeting_id}",
-                        "message": "Meeting detected but OAuth authorization required for recording",
-                        "oauth_required": True,
-                        "error_details": meeting_details.get('error', 'OAuth required')
-                    })
                 
                 detected_meetings.append(combined_info)
             else:
-                # Store invalid URLs for debugging
-                url_info["detected_from_url"] = url
+                # Store even invalid URLs for debugging
                 detected_meetings.append(url_info)
         
         result = {
             "meetings_detected": len(detected_meetings) > 0,
             "meetings_count": len(detected_meetings),
-            "meetings": detected_meetings,
-            "oauth_required": oauth_required,
-            "message": f"Detected {len(detected_meetings)} Zoom meeting(s). {'OAuth authorization required for recording.' if oauth_required else 'Ready for recording.'}"
+            "meetings": detected_meetings
         }
         
         if detected_meetings:
             print(f"🎯 Processed {len(detected_meetings)} Zoom meetings from text")
-            if oauth_required:
-                print("⚠️ OAuth authorization required for full meeting access")
         
         return result
 
