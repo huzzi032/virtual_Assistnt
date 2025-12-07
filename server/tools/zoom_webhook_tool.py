@@ -22,16 +22,16 @@ class ZoomWebhookHandler:
         """Initialize Zoom webhook handler"""
         
         # Zoom webhook configuration
-        self.webhook_secret = os.getenv('ZOOM_SECRET_TOKEN')
-        self.verification_token = os.getenv('ZOOM_SECRET_TOKEN')  # Use same secret for verification
+        self.webhook_secret = os.getenv('ZOOM_WEBHOOK_SECRET')
+        self.verification_token = os.getenv('ZOOM_WEBHOOK_SECRET')  # Use same secret for verification
         
         # Database for storing webhook events
         self.db_path = "database.db"
         self._init_database()
         
         print(f"🎣 Zoom Webhook Handler initialized")
-        print(f"   Secret configured: {'✅' if self.webhook_secret else '❌ Missing ZOOM_SECRET_TOKEN'}")
-        print(f"   Verification token: {'✅' if self.verification_token else '❌ Missing ZOOM_SECRET_TOKEN'}")
+        print(f"   Secret configured: {'✅' if self.webhook_secret else '❌ Missing ZOOM_WEBHOOK_SECRET'}")
+        print(f"   Verification token: {'✅' if self.verification_token else '❌ Missing ZOOM_VERIFICATION_TOKEN'}")
 
     def _init_database(self):
         """Initialize database table for webhook events"""
@@ -82,18 +82,6 @@ class ZoomWebhookHandler:
                     auto_summary BOOLEAN DEFAULT 0,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            
-            # Create zoom_live_insights table for real-time AI processing
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS zoom_live_insights (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    meeting_id TEXT NOT NULL,
-                    insight_type TEXT NOT NULL, -- 'todo', 'action', 'decision', etc.
-                    content TEXT NOT NULL,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    processed BOOLEAN DEFAULT 0
                 )
             """)
             
@@ -255,75 +243,12 @@ class ZoomWebhookHandler:
         """, (meeting_id, meeting_uuid, topic, start_time or datetime.now()))
         
         print(f"🟢 Meeting started: {topic} (ID: {meeting_id})")
-        print(f"🎯 Automatically starting meeting processing...")
         
-        # Trigger automatic recording and processing
-        try:
-            await self._start_automatic_recording(meeting_id, meeting_uuid, topic)
-        except Exception as e:
-            print(f"❌ Error starting automatic recording: {e}")
-
-    async def _start_automatic_recording(self, meeting_id: str, meeting_uuid: str, topic: str):
-        """Start automatic recording and processing for the meeting"""
-        
-        print(f"🔴 Starting automatic recording for meeting: {topic}")
-        
-        # Enable cloud recording via Zoom API
-        try:
-            from .zoom_oauth_tool import get_zoom_access_token
-            access_token = await get_zoom_access_token()
-            
-            if access_token:
-                # Start cloud recording
-                import aiohttp
-                recording_url = f"https://api.zoom.us/v2/meetings/{meeting_id}/recordings"
-                headers = {
-                    "Authorization": f"Bearer {access_token}",
-                    "Content-Type": "application/json"
-                }
-                recording_data = {
-                    "method": "cloud",
-                    "auto_recording": "cloud"
-                }
-                
-                async with aiohttp.ClientSession() as session:
-                    async with session.patch(recording_url, headers=headers, json=recording_data) as response:
-                        if response.status == 200 or response.status == 204:
-                            print(f"✅ Cloud recording enabled for meeting {meeting_id}")
-                        else:
-                            error_text = await response.text()
-                            print(f"⚠️ Could not enable recording: {response.status} - {error_text}")
-            
-            # Set up real-time transcript monitoring
-            await self._setup_transcript_monitoring(meeting_id, meeting_uuid, topic)
-            
-        except Exception as e:
-            print(f"❌ Error in automatic recording setup: {e}")
-
-    async def _setup_transcript_monitoring(self, meeting_id: str, meeting_uuid: str, topic: str):
-        """Set up monitoring for live transcripts"""
-        
-        print(f"📝 Setting up transcript monitoring for meeting: {topic}")
-        
-        # Store meeting info for frontend notification
-        try:
-            conn = sqlite3.connect(self.db_path)
-            cur = conn.cursor()
-            
-            # Update meeting status to show it's being monitored
-            cur.execute("""
-                UPDATE zoom_meeting_sessions 
-                SET real_time_processing = 1, status = 'recording'
-                WHERE meeting_id = ?
-            """, (meeting_id,))
-            
-            conn.commit()
-            conn.close()
-            
-            print(f"✅ Transcript monitoring active for meeting {meeting_id}")
-            
-        except Exception as e:
-            print(f"❌ Error setting up transcript monitoring: {e}")
+        # TODO: Trigger real-time processing setup
+        # This could include:
+        # - Setting up real-time transcript listeners
+        # - Initializing AI processing pipeline
+        # - Notifying connected clients
 
     async def _handle_meeting_ended(self, cur, meeting_id: str, meeting_uuid: str):
         """Handle meeting ended event"""
@@ -336,122 +261,13 @@ class ZoomWebhookHandler:
         """, (datetime.now(), datetime.now(), meeting_id))
         
         print(f"🔴 Meeting ended: {meeting_id}")
-        print(f"🎯 Starting post-meeting processing...")
         
-        # Trigger automatic post-meeting processing
-        try:
-            await self._process_meeting_completion(meeting_id, meeting_uuid)
-        except Exception as e:
-            print(f"❌ Error in post-meeting processing: {e}")
-
-    async def _process_meeting_completion(self, meeting_id: str, meeting_uuid: str):
-        """Process completed meeting - generate summaries, extract todos, etc."""
-        
-        print(f"📋 Processing completed meeting: {meeting_id}")
-        
-        try:
-            # Get all transcripts for this meeting
-            conn = sqlite3.connect(self.db_path)
-            cur = conn.cursor()
-            
-            cur.execute("""
-                SELECT transcript_content, speaker_name, timestamp 
-                FROM zoom_transcripts 
-                WHERE meeting_id = ? 
-                ORDER BY timestamp
-            """, (meeting_id,))
-            
-            transcripts = cur.fetchall()
-            
-            if transcripts:
-                # Combine all transcripts
-                full_transcript = "\n".join([
-                    f"{speaker}: {content}" if speaker else content 
-                    for content, speaker, _ in transcripts
-                ])
-                
-                print(f"📝 Processing {len(transcripts)} transcript segments")
-                
-                # Process with AI tools for todos, action items, summary
-                await self._process_meeting_transcript(meeting_id, full_transcript)
-                
-            else:
-                print(f"⚠️ No transcripts found for meeting {meeting_id}")
-            
-            conn.close()
-            
-        except Exception as e:
-            print(f"❌ Error processing meeting completion: {e}")
-
-    async def _process_meeting_transcript(self, meeting_id: str, transcript: str):
-        """Process meeting transcript with AI tools"""
-        
-        try:
-            print(f"🧠 AI processing transcript for meeting {meeting_id}")
-            
-            # Extract todos
-            try:
-                from .todo_tool import extract_and_process_todos
-                todo_result = await extract_and_process_todos(transcript)
-                todos = todo_result.get('todos', [])
-                print(f"✅ Extracted {len(todos)} todos from meeting")
-            except Exception as e:
-                print(f"⚠️ Todo extraction failed: {e}")
-                todos = []
-            
-            # Extract action tasks
-            try:
-                from .action_task_tool import extract_action_tasks
-                action_result = await extract_action_tasks(transcript)
-                action_tasks = action_result.get('action_tasks', [])
-                print(f"✅ Extracted {len(action_tasks)} action tasks from meeting")
-            except Exception as e:
-                print(f"⚠️ Action task extraction failed: {e}")
-                action_tasks = []
-            
-            # Generate meeting summary
-            try:
-                from .llm_tool import call_openai_llm
-                summary_prompt = f"Provide a concise summary of this Zoom meeting transcript: {transcript[:2000]}..."
-                summary = await call_openai_llm(transcript, summary_prompt)
-                print(f"✅ Generated meeting summary ({len(summary)} chars)")
-            except Exception as e:
-                print(f"⚠️ Summary generation failed: {e}")
-                summary = f"Meeting completed with {len(transcript)} characters of transcript"
-            
-            # Store processed results
-            conn = sqlite3.connect(self.db_path)
-            cur = conn.cursor()
-            
-            # Update meeting session with processed data
-            cur.execute("""
-                UPDATE zoom_meeting_sessions 
-                SET 
-                    summary = ?,
-                    todos_count = ?,
-                    action_tasks_count = ?,
-                    transcript_length = ?,
-                    processed_at = ?
-                WHERE meeting_id = ?
-            """, (
-                summary,
-                len(todos),
-                len(action_tasks),
-                len(transcript),
-                datetime.now(),
-                meeting_id
-            ))
-            
-            conn.commit()
-            conn.close()
-            
-            print(f"🎉 Meeting {meeting_id} processing completed!")
-            print(f"   📋 Summary: Generated")
-            print(f"   ✅ Todos: {len(todos)}")
-            print(f"   ⚡ Actions: {len(action_tasks)}")
-            
-        except Exception as e:
-            print(f"❌ Error in AI transcript processing: {e}")
+        # TODO: Trigger post-meeting processing
+        # This could include:
+        # - Generating meeting summary
+        # - Processing accumulated transcripts
+        # - Extracting action items and todos
+        # - Sending summary email
 
     async def _handle_live_transcript(self, payload: dict) -> dict:
         """Handle real-time transcript updates"""
@@ -492,12 +308,12 @@ class ZoomWebhookHandler:
             conn.commit()
             conn.close()
             
-            # Trigger real-time AI processing for immediate insights
-            asyncio.create_task(self._process_live_transcript(
-                meeting_id, transcript_content, speaker_name
-            ))
-            
-            print(f"📝 Stored live transcript: {len(transcript_content)} chars")
+            # TODO: Trigger real-time AI processing
+            # This could include:
+            # - Real-time action item detection
+            # - Live todo extraction
+            # - Sentiment analysis
+            # - Key topic identification
             
             return {
                 "status": "success",
@@ -509,72 +325,6 @@ class ZoomWebhookHandler:
         except Exception as e:
             print(f"❌ Error storing live transcript: {e}")
             return {"success": False, "status": "error", "error": str(e)}
-
-    async def _process_live_transcript(self, meeting_id: str, transcript_content: str, speaker_name: str):
-        """Process live transcript for real-time insights"""
-        
-        try:
-            print(f"🧠 Real-time processing: {speaker_name} - {transcript_content[:30]}...")
-            
-            # Quick todo detection for urgent items
-            if any(keyword in transcript_content.lower() for keyword in [
-                'todo', 'to do', 'action item', 'follow up', 'remind me',
-                'take note', 'write down', 'remember to'
-            ]):
-                try:
-                    from .todo_tool import extract_and_process_todos
-                    todo_result = await extract_and_process_todos(transcript_content)
-                    todos = todo_result.get('todos', [])
-                    
-                    if todos:
-                        print(f"🔥 LIVE TODO detected: {todos}")
-                        # Store real-time todos in database for immediate frontend display
-                        await self._store_live_insights(meeting_id, 'todo', todos)
-                        
-                except Exception as e:
-                    print(f"⚠️ Live todo extraction failed: {e}")
-            
-            # Quick action item detection
-            if any(keyword in transcript_content.lower() for keyword in [
-                'will do', 'i\'ll handle', 'assign', 'responsible for', 'task',
-                'deadline', 'by tomorrow', 'by next week'
-            ]):
-                try:
-                    from .action_task_tool import extract_action_tasks
-                    action_result = await extract_action_tasks(transcript_content)
-                    actions = action_result.get('action_tasks', [])
-                    
-                    if actions:
-                        print(f"⚡ LIVE ACTION detected: {actions}")
-                        await self._store_live_insights(meeting_id, 'action', actions)
-                        
-                except Exception as e:
-                    print(f"⚠️ Live action extraction failed: {e}")
-            
-        except Exception as e:
-            print(f"❌ Error in live transcript processing: {e}")
-
-    async def _store_live_insights(self, meeting_id: str, insight_type: str, insights: list):
-        """Store real-time insights for immediate frontend updates"""
-        
-        try:
-            conn = sqlite3.connect(self.db_path)
-            cur = conn.cursor()
-            
-            for insight in insights:
-                cur.execute("""
-                    INSERT INTO zoom_live_insights
-                    (meeting_id, insight_type, content, timestamp)
-                    VALUES (?, ?, ?, ?)
-                """, (meeting_id, insight_type, insight, datetime.now()))
-            
-            conn.commit()
-            conn.close()
-            
-            print(f"💾 Stored {len(insights)} live {insight_type}s for meeting {meeting_id}")
-            
-        except Exception as e:
-            print(f"❌ Error storing live insights: {e}")
 
     async def _handle_transcript_completed(self, payload: dict) -> dict:
         """Handle completed transcript notification"""
