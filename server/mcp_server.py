@@ -1467,6 +1467,91 @@ async def get_zoom_monitor_status_api(request: Request):
             "error": str(e)
         }, status_code=500)
 
+@app.post("/api/zoom/monitor/trigger")
+async def trigger_zoom_meeting_api(request: Request):
+    """
+    🎯 TRIGGER ZOOM MEETING RECORDING
+    
+    For Azure server deployment - manually trigger meeting recording when user provides meeting URL
+    
+    Body:
+    ----
+    {
+        "meeting_id": "123456789",
+        "meeting_url": "https://zoom.us/j/123456789",
+        "topic": "Optional meeting topic"
+    }
+    
+    Response:
+    --------
+    {
+        "success": true,
+        "message": "Recording started for meeting 123456789"
+    }
+    """
+    try:
+        data = await request.json()
+        meeting_id = data.get('meeting_id')
+        
+        if not meeting_id:
+            return JSONResponse({
+                "success": False,
+                "error": "meeting_id is required"
+            }, status_code=400)
+        
+        from tools.zoom_meeting_monitor import zoom_monitor
+        result = await zoom_monitor.trigger_meeting_recording(meeting_id, data)
+        
+        return JSONResponse(result)
+        
+    except Exception as e:
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        }, status_code=500)
+
+@app.post("/api/zoom/monitor/detect-url")
+async def detect_zoom_meeting_url_api(request: Request):
+    """
+    🔗 DETECT ZOOM MEETING FROM URL
+    
+    Automatically extract meeting ID from Zoom URL and start recording
+    
+    Body:
+    ----
+    {
+        "url": "https://zoom.us/j/123456789?pwd=abc123"
+    }
+    
+    Response:
+    --------
+    {
+        "success": true,
+        "message": "Recording started for meeting 123456789",
+        "meeting_id": "123456789"
+    }
+    """
+    try:
+        data = await request.json()
+        url = data.get('url')
+        
+        if not url:
+            return JSONResponse({
+                "success": False,
+                "error": "url is required"
+            }, status_code=400)
+        
+        from tools.zoom_meeting_monitor import zoom_monitor
+        result = await zoom_monitor.detect_meeting_from_url(url)
+        
+        return JSONResponse(result)
+        
+    except Exception as e:
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        }, status_code=500)
+
 @app.post("/webhooks/zoom")
 async def zoom_webhook_endpoint(request: Request):
     """
