@@ -93,23 +93,27 @@ class ZoomMeetingMonitor:
             print(f"🎙️ Starting background recording for meeting {meeting_id}")
             
             # Import recording tools
-            from .zoom_webhook_tool import zoom_webhook_handler
+            from .zoom_webhook_tool import start_meeting_recording
             
             # Create meeting session record
-            await zoom_webhook_handler._handle_meeting_started({
+            result = await start_meeting_recording({
                 'meeting_id': meeting_id,
                 'topic': f'Auto-detected Meeting {meeting_id}',
                 'start_time': datetime.now().isoformat(),
                 'detected_via': 'process_monitor'
             })
             
-            self.recording_active = True
-            self.current_meeting_id = meeting_id
-            
-            print(f"✅ Background recording started for meeting {meeting_id}")
+            if result.get('success'):
+                self.recording_active = True
+                self.current_meeting_id = meeting_id
+                print(f"✅ Background recording started for meeting {meeting_id}")
+            else:
+                print(f"❌ Failed to start recording: {result.get('error')}")
             
         except Exception as e:
             print(f"❌ Error starting background recording: {e}")
+            import traceback
+            print(f"Full traceback: {traceback.format_exc()}")
     
     async def stop_background_recording(self):
         """Stop background recording"""
@@ -118,21 +122,25 @@ class ZoomMeetingMonitor:
                 print(f"🛑 Stopping background recording for meeting {self.current_meeting_id}")
                 
                 # Import recording tools
-                from .zoom_webhook_tool import zoom_webhook_handler
+                from .zoom_webhook_tool import stop_meeting_recording
                 
                 # End meeting session
-                await zoom_webhook_handler._handle_meeting_ended({
+                result = await stop_meeting_recording({
                     'meeting_id': self.current_meeting_id,
                     'end_time': datetime.now().isoformat()
                 })
                 
-                self.recording_active = False
-                self.current_meeting_id = None
-                
-                print("✅ Background recording stopped")
+                if result.get('success'):
+                    self.recording_active = False
+                    self.current_meeting_id = None
+                    print("✅ Background recording stopped")
+                else:
+                    print(f"❌ Failed to stop recording: {result.get('error')}")
                 
         except Exception as e:
             print(f"❌ Error stopping background recording: {e}")
+            import traceback
+            print(f"Full traceback: {traceback.format_exc()}")
     
     async def monitor_loop(self):
         """Main monitoring loop"""
@@ -168,6 +176,8 @@ class ZoomMeetingMonitor:
                 
             except Exception as e:
                 print(f"❌ Monitor loop error: {e}")
+                import traceback
+                print(f"Full traceback: {traceback.format_exc()}")
                 await asyncio.sleep(10)  # Wait longer on error
     
     def start_monitoring(self):

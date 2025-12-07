@@ -447,6 +447,69 @@ def get_zoom_meeting_transcript(meeting_id: str) -> list:
     """Get transcript for Zoom meeting"""
     return zoom_webhook_handler.get_meeting_transcript(meeting_id)
 
+async def start_meeting_recording(meeting_data: dict) -> dict:
+    """Start recording for detected meeting (called by monitor)"""
+    try:
+        meeting_id = meeting_data.get('meeting_id')
+        if not meeting_id:
+            raise ValueError("meeting_id is required")
+        
+        meeting_id = str(meeting_id)
+        meeting_uuid = str(meeting_data.get('meeting_uuid', f"auto-{meeting_id}"))
+        topic = str(meeting_data.get('topic', f'Auto-detected Meeting {meeting_id}'))
+        start_time = meeting_data.get('start_time')
+        
+        # Ensure start_time is a string
+        if start_time is None:
+            from datetime import datetime
+            start_time = datetime.now().isoformat()
+        else:
+            start_time = str(start_time)
+        
+        # Use database connection
+        import sqlite3
+        conn = sqlite3.connect(zoom_webhook_handler.db_path)
+        cur = conn.cursor()
+        
+        await zoom_webhook_handler._handle_meeting_started(cur, meeting_id, meeting_uuid, topic, start_time)
+        
+        conn.commit()
+        conn.close()
+        
+        print(f"✅ Recording started for meeting {meeting_id}")
+        return {"success": True, "meeting_id": meeting_id}
+        
+    except Exception as e:
+        print(f"❌ Error starting meeting recording: {e}")
+        return {"success": False, "error": str(e)}
+
+async def stop_meeting_recording(meeting_data: dict) -> dict:
+    """Stop recording for detected meeting (called by monitor)"""
+    try:
+        meeting_id = meeting_data.get('meeting_id')
+        if not meeting_id:
+            raise ValueError("meeting_id is required")
+        
+        meeting_id = str(meeting_id)
+        meeting_uuid = str(meeting_data.get('meeting_uuid', f"auto-{meeting_id}"))
+        
+        # Use database connection
+        import sqlite3
+        conn = sqlite3.connect(zoom_webhook_handler.db_path)
+        cur = conn.cursor()
+        
+        await zoom_webhook_handler._handle_meeting_ended(cur, meeting_id, meeting_uuid)
+        
+        conn.commit()
+        conn.close()
+        
+        print(f"✅ Recording stopped for meeting {meeting_id}")
+        return {"success": True, "meeting_id": meeting_id}
+        
+    except Exception as e:
+        print(f"❌ Error stopping meeting recording: {e}")
+        return {"success": False, "error": str(e)}
+
 if __name__ == "__main__":
     # Test webhook handler
     handler = ZoomWebhookHandler()
