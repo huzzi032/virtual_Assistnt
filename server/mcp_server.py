@@ -1581,6 +1581,143 @@ async def reset_zoom_monitor_api(request: Request):
             "error": str(e)
         }, status_code=500)
 
+@app.get("/api/zoom/meetings/results")
+async def get_meeting_results_api(request: Request):
+    """
+    📋 GET COMPLETED MEETING RESULTS
+    
+    Returns processed meeting data with transcripts and summaries
+    
+    Query Parameters:
+    ---------------
+    - meeting_id: Specific meeting ID (optional)
+    - limit: Number of meetings to return (default 10)
+    - status: Filter by status ('ended', 'active') (default: ended)
+    
+    Response:
+    --------
+    {
+        "success": true,
+        "meetings": [
+            {
+                "meeting_id": "123456789",
+                "topic": "Weekly Standup",
+                "start_time": "2025-01-15T10:00:00Z",
+                "end_time": "2025-01-15T11:00:00Z",
+                "status": "ended",
+                "transcript_summary": "Meeting transcript preview...",
+                "total_transcript_count": 25,
+                "full_transcript": [
+                    {
+                        "speaker": "John Doe",
+                        "content": "Hello everyone...",
+                        "timestamp": "2025-01-15T10:01:00Z"
+                    }
+                ]
+            }
+        ]
+    }
+    """
+    try:
+        meeting_id = request.query_params.get('meeting_id')
+        limit = int(request.query_params.get('limit', 10))
+        status_filter = request.query_params.get('status', 'ended')
+        
+        import sqlite3
+        from pathlib import Path
+        
+        # Use correct database path
+        db_path = Path(__file__).parent / 'database.db'
+        conn = sqlite3.connect(str(db_path))
+        cur = conn.cursor()
+        
+        # Build query for meeting sessions
+        query = """
+        SELECT meeting_id, topic, start_time, end_time, status, created_at
+        FROM zoom_meeting_sessions 
+        WHERE status = ?
+        """
+        params = [status_filter]
+        
+        if meeting_id:
+            query += " AND meeting_id = ?"
+            params.append(meeting_id)
+        
+        query += " ORDER BY created_at DESC LIMIT ?"
+        params.append(str(limit))
+        
+        cur.execute(query, params)
+        sessions = cur.fetchall()
+        
+        meetings_data = []
+        for session in sessions:
+            session_meeting_id = session[0]
+            
+            # Get all transcripts for this meeting
+            cur.execute("""
+                SELECT speaker_name, transcript_content, timestamp, sequence_number
+                FROM zoom_live_transcripts 
+                WHERE meeting_id = ?
+                ORDER BY sequence_number ASC, timestamp ASC
+            """, (session_meeting_id,))
+            
+            transcripts = cur.fetchall()
+            
+            # Build full transcript
+            full_transcript = []
+            transcript_lines = []
+            
+            for transcript in transcripts:
+                speaker = transcript[0] or "Unknown Speaker"
+                content = transcript[1] or ""
+                timestamp = transcript[2] or ""
+                
+                full_transcript.append({
+                    "speaker": speaker,
+                    "content": content,
+                    "timestamp": timestamp
+                })
+                
+                transcript_lines.append(f"{speaker}: {content}")
+            
+            # Create summary (first 3 entries)
+            transcript_summary = ""
+            if transcript_lines:
+                preview_lines = transcript_lines[:3]
+                transcript_summary = " | ".join(preview_lines)
+                if len(transcript_lines) > 3:
+                    transcript_summary += f" ... (+{len(transcript_lines) - 3} more)"
+            
+            meeting_data = {
+                "meeting_id": session[0],
+                "topic": session[1] or "Untitled Meeting",
+                "start_time": session[2],
+                "end_time": session[3],
+                "status": session[4],
+                "created_at": session[5],
+                "transcript_summary": transcript_summary,
+                "total_transcript_count": len(transcript_lines),
+                "full_transcript": full_transcript
+            }
+            meetings_data.append(meeting_data)
+        
+        conn.close()
+        
+        return JSONResponse({
+            "success": True,
+            "meetings": meetings_data,
+            "count": len(meetings_data)
+        })
+        
+    except Exception as e:
+        import traceback
+        print(f"❌ Error getting meeting results: {e}")
+        print(f"Traceback: {traceback.format_exc()}")
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        }, status_code=500)
+
 @app.post("/webhooks/zoom")
 async def zoom_webhook_endpoint(request: Request):
     """
