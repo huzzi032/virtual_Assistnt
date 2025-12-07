@@ -31,6 +31,7 @@ from tools.todo_tool import extract_and_process_todos, todo_manager
 from tools.zoom_oauth_tool import get_zoom_auth_url, handle_zoom_oauth_callback, get_zoom_access_token, is_zoom_authenticated
 from tools.zoom_webhook_tool import zoom_webhook_handler
 from tools.zoom_meeting_tool import detect_zoom_meetings, parse_zoom_meeting_url, process_text_for_zoom_meetings, get_recent_zoom_meetings
+from tools.zoom_meeting_monitor import start_meeting_monitor, stop_meeting_monitor, get_monitor_status
 
 # Initialize FastMCP server
 server = FastMCP("voice_agent_server")
@@ -1291,6 +1292,181 @@ async def get_recent_meetings_api(request: Request):
             "error": str(e)
         }, status_code=500)
 
+@app.post("/api/zoom/monitor/start")
+async def start_zoom_monitor_api(request: Request):
+    """
+    🎯 START AUTOMATIC ZOOM MEETING MONITORING
+    
+    FLUTTER INTEGRATION:
+    ===================
+    
+    HTTP Method: POST
+    URL: {base_url}/api/zoom/monitor/start
+    Content-Type: application/json
+    
+    Response (Success):
+    -----------------
+    {
+        "success": true,
+        "message": "Zoom meeting monitoring started",
+        "status": {
+            "is_monitoring": true,
+            "recording_active": false,
+            "current_meeting_id": null
+        }
+    }
+    
+    Flutter Example:
+    --------------
+    ```dart
+    Future<void> startZoomMonitoring() async {
+        try {
+            var response = await http.post(
+                Uri.parse('$baseUrl/api/zoom/monitor/start'),
+                headers: {'Content-Type': 'application/json'}
+            );
+            var data = json.decode(response.body);
+            
+            if (data['success']) {
+                print('✅ Monitoring started');
+            }
+        } catch (e) {
+            print('❌ Error starting monitoring: $e');
+        }
+    }
+    ```
+    """
+    try:
+        start_meeting_monitor()
+        status = get_monitor_status()
+        
+        return JSONResponse({
+            "success": True,
+            "message": "Zoom meeting monitoring started",
+            "status": status
+        })
+        
+    except Exception as e:
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        }, status_code=500)
+
+@app.post("/api/zoom/monitor/stop")
+async def stop_zoom_monitor_api(request: Request):
+    """
+    🛑 STOP AUTOMATIC ZOOM MEETING MONITORING
+    
+    FLUTTER INTEGRATION:
+    ===================
+    
+    HTTP Method: POST
+    URL: {base_url}/api/zoom/monitor/stop
+    
+    Response (Success):
+    -----------------
+    {
+        "success": true,
+        "message": "Zoom meeting monitoring stopped",
+        "status": {
+            "is_monitoring": false,
+            "recording_active": false,
+            "current_meeting_id": null
+        }
+    }
+    
+    Flutter Example:
+    --------------
+    ```dart
+    Future<void> stopZoomMonitoring() async {
+        try {
+            var response = await http.post(
+                Uri.parse('$baseUrl/api/zoom/monitor/stop'),
+                headers: {'Content-Type': 'application/json'}
+            );
+            var data = json.decode(response.body);
+            
+            if (data['success']) {
+                print('🛑 Monitoring stopped');
+            }
+        } catch (e) {
+            print('❌ Error stopping monitoring: $e');
+        }
+    }
+    ```
+    """
+    try:
+        stop_meeting_monitor()
+        status = get_monitor_status()
+        
+        return JSONResponse({
+            "success": True,
+            "message": "Zoom meeting monitoring stopped",
+            "status": status
+        })
+        
+    except Exception as e:
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        }, status_code=500)
+
+@app.get("/api/zoom/monitor/status")
+async def get_zoom_monitor_status_api(request: Request):
+    """
+    📊 GET ZOOM MEETING MONITORING STATUS
+    
+    FLUTTER INTEGRATION:
+    ===================
+    
+    HTTP Method: GET
+    URL: {base_url}/api/zoom/monitor/status
+    
+    Response:
+    --------
+    {
+        "success": true,
+        "status": {
+            "is_monitoring": true,
+            "recording_active": false,
+            "current_meeting_id": null
+        }
+    }
+    
+    Flutter Example:
+    --------------
+    ```dart
+    Future<Map<String, dynamic>> getMonitoringStatus() async {
+        try {
+            var response = await http.get(
+                Uri.parse('$baseUrl/api/zoom/monitor/status')
+            );
+            var data = json.decode(response.body);
+            
+            if (data['success']) {
+                return data['status'];
+            }
+            return {};
+        } catch (e) {
+            return {};
+        }
+    }
+    ```
+    """
+    try:
+        status = get_monitor_status()
+        
+        return JSONResponse({
+            "success": True,
+            "status": status
+        })
+        
+    except Exception as e:
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        }, status_code=500)
+
 @app.post("/webhooks/zoom")
 async def zoom_webhook_endpoint(request: Request):
     """
@@ -1635,6 +1811,11 @@ if __name__ == "__main__":
             from tools.zoom_oauth_tool import zoom_oauth_manager
             zoom_oauth_manager._init_database()
             print("✅ Zoom database tables initialized")
+            
+            # Start automatic Zoom meeting monitoring
+            print("🎯 Starting automatic Zoom meeting monitoring...")
+            start_meeting_monitor()
+            print("✅ Zoom meeting monitoring started")
             
             # Start ASGI server with error handling
             config = uvicorn.Config(app, host="0.0.0.0", port=8000, log_level="info")
