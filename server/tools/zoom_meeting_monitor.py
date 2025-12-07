@@ -7,7 +7,7 @@ import psutil
 import time
 import asyncio
 import threading
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 import subprocess
 import re
 from datetime import datetime
@@ -40,28 +40,30 @@ class ZoomMeetingMonitor:
         # This needs to be triggered by URL detection or webhooks instead
         return None
 
-    async def trigger_meeting_recording(self, meeting_id: str, meeting_info: dict = None):
+    async def trigger_meeting_recording(self, meeting_id: str, meeting_info: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Manually trigger meeting recording (called when URL is detected)"""
         try:
-            if not self.recording_active:
-                print(f"🎯 Auto-triggered recording for meeting: {meeting_id}")
-                
-                # Handle None meeting_info safely
-                if meeting_info is None:
-                    meeting_info = {}
-                
-                topic = meeting_info.get('topic', f'Meeting {meeting_id}') if meeting_info else f'Auto-detected Meeting {meeting_id}'
-                await self.start_background_recording(meeting_id, topic)
-                return {"success": True, "message": f"Recording started for meeting {meeting_id}", "meeting_id": meeting_id}
+            # Allow new recordings even if one is active (for multiple concurrent meetings)
+            if self.recording_active and self.current_meeting_id == meeting_id:
+                return {"success": False, "message": f"Recording already active for meeting {meeting_id}", "current_meeting": self.current_meeting_id}
+            
+            print(f"🎯 Auto-triggered recording for meeting: {meeting_id}")
+            
+            # Handle None meeting_info safely with proper typing
+            if meeting_info is not None:
+                topic = meeting_info.get('topic', f'Meeting {meeting_id}')
             else:
-                return {"success": False, "message": "Recording already active", "current_meeting": self.current_meeting_id}
+                topic = f'Auto-detected Meeting {meeting_id}'
+            
+            await self.start_background_recording(meeting_id, topic)
+            return {"success": True, "message": f"Recording started for meeting {meeting_id}", "meeting_id": meeting_id}
         except Exception as e:
             print(f"❌ Error triggering meeting recording: {e}")
             import traceback
             print(f"Full traceback: {traceback.format_exc()}")
             return {"success": False, "message": str(e)}
     
-    async def detect_meeting_from_url(self, url: str):
+    async def detect_meeting_from_url(self, url: str) -> Dict[str, Any]:
         """Extract meeting ID from Zoom URL and start recording"""
         try:
             # Extract meeting ID from various Zoom URL formats
@@ -90,7 +92,7 @@ class ZoomMeetingMonitor:
             print(f"❌ Error detecting meeting from URL: {e}")
             return {"success": False, "message": str(e)}
     
-    async def start_background_recording(self, meeting_id: str, topic: str = None):
+    async def start_background_recording(self, meeting_id: str, topic: Optional[str] = None) -> None:
         """Start background recording for detected meeting"""
         try:
             print(f"🎙️ Starting background recording for meeting {meeting_id}")
@@ -167,6 +169,16 @@ class ZoomMeetingMonitor:
                 print(f"Full traceback: {traceback.format_exc()}")
                 await asyncio.sleep(60)  # Wait longer on error
     
+    async def reset_monitor_state(self):
+        """Reset monitor state to allow new recordings"""
+        try:
+            print("🔄 Resetting monitor state")
+            self.recording_active = False
+            self.current_meeting_id = None
+            print("✅ Monitor state reset")
+        except Exception as e:
+            print(f"❌ Error resetting monitor state: {e}")
+    
     def start_monitoring(self):
         """Start the monitoring process"""
         if not self.is_monitoring:
@@ -218,3 +230,7 @@ def get_monitor_status():
         'recording_active': zoom_monitor.recording_active,
         'current_meeting_id': zoom_monitor.current_meeting_id
     }
+
+async def reset_monitor():
+    """Reset the global meeting monitor state"""
+    await zoom_monitor.reset_monitor_state()

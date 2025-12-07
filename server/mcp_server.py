@@ -1552,6 +1552,35 @@ async def detect_zoom_meeting_url_api(request: Request):
             "error": str(e)
         }, status_code=500)
 
+@app.post("/api/zoom/monitor/reset")
+async def reset_zoom_monitor_api(request: Request):
+    """
+    🔄 RESET ZOOM MEETING MONITOR
+    
+    Reset monitor state to allow new recordings
+    
+    Response:
+    --------
+    {
+        "success": true,
+        "message": "Monitor state reset"
+    }
+    """
+    try:
+        from tools.zoom_meeting_monitor import reset_monitor
+        await reset_monitor()
+        
+        return JSONResponse({
+            "success": True,
+            "message": "Monitor state reset"
+        })
+        
+    except Exception as e:
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        }, status_code=500)
+
 @app.post("/webhooks/zoom")
 async def zoom_webhook_endpoint(request: Request):
     """
