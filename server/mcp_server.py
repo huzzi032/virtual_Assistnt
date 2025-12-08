@@ -301,7 +301,7 @@ async def test_stt_endpoint():
 
 
 @app.post("/api/process-audio")
-async def process_audio_endpoint(audio_file: UploadFile = File(...)):
+async def process_audio_endpoint(audio_file: UploadFile = File(...), user_email: str = Form(None)):
     """
     🎤 SIMPLE STT AUDIO PROCESSING ENDPOINT
     
@@ -444,6 +444,35 @@ async def process_audio_endpoint(audio_file: UploadFile = File(...)):
         }
         
         print(f"🎯 Audio processing completed successfully")
+        
+        # Send email notification if user_email provided
+        if user_email:
+            try:
+                from tools.notify_tool import notifier
+                email_subject = f"Voice Recording Processing Complete"
+                email_body = f"""Voice Recording Processing Results:
+
+📝 TRANSCRIPT:
+{transcription}
+
+🎯 ACTION ITEMS:
+{', '.join([task.get('task', str(task)) if isinstance(task, dict) else str(task) for task in action_tasks]) if action_tasks else 'No action items found'}
+
+📋 TODO ITEMS:
+{', '.join(todos) if todos else 'No todos found'}
+
+📊 SUMMARY:
+{summary_from_todos or 'Processing completed successfully'}
+
+✅ Voice recording processed successfully!
+
+Best regards,
+Your Virtual Assistant"""
+                await notifier(user_email, email_subject, email_body)
+                print(f"📧 Email notification sent to {user_email}")
+            except Exception as e:
+                print(f"⚠️ Failed to send email notification: {e}")
+        
         return result
         
     except HTTPException:

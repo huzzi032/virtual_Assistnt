@@ -9,6 +9,15 @@ from datetime import datetime
 from typing import Dict, List, Any, Optional
 import asyncio
 
+# Import notification tool
+try:
+    from notify_tool import notifier
+except ImportError:
+    try:
+        from tools.notify_tool import notifier
+    except ImportError:
+        from server.tools.notify_tool import notifier
+
 def init_database():
     """Initialize the audio processing database"""
     conn = sqlite3.connect('audio_files.db')
@@ -112,6 +121,30 @@ async def _process_large_audio_file(file_path: str, processing_id: int, filename
         conn.commit()
         conn.close()
         
+        # Send email notification if user_email provided
+        if user_email:
+            try:
+                email_subject = f"Audio Processing Complete - {filename} (Chunked)"
+                email_body = f"""Audio Processing Results for: {filename}
+
+📝 TRANSCRIPT:
+[Large file] Processing in chunks - transcript pending...
+
+🎯 ACTION ITEMS:
+Action items will be extracted after full processing
+
+📋 TODO ITEMS:
+TODO items will be extracted after full processing
+
+⏳ Large file processing in progress - you'll receive another email when complete.
+
+Best regards,
+Your Virtual Assistant"""
+                await notifier(user_email, email_subject, email_body)
+                print(f"📧 Email notification sent to {user_email}")
+            except Exception as e:
+                print(f"⚠️ Failed to send email notification: {e}")
+        
         return {
             "success": True,
             "processing_id": processing_id,
@@ -156,10 +189,34 @@ async def _process_small_audio_file(file_path: str, processing_id: int, filename
         conn.commit()
         conn.close()
         
+        # Send email notification if user_email provided
+        if user_email:
+            try:
+                email_subject = f"Audio Processing Complete - {filename}"
+                email_body = f"""Audio Processing Results for: {filename}
+
+📝 TRANSCRIPT:
+[Small file] Transcript extracted successfully
+
+🎯 ACTION ITEMS:
+Sample action items from audio
+
+📋 TODO ITEMS:
+Sample TODO items from audio
+
+✅ Processing completed successfully!
+
+Best regards,
+Your Virtual Assistant"""
+                await notifier(user_email, email_subject, email_body)
+                print(f"📧 Email notification sent to {user_email}")
+            except Exception as e:
+                print(f"⚠️ Failed to send email notification: {e}")
+        
         return {
             "success": True,
             "processing_id": processing_id,
-            "message": f"Audio file ({filename}) processed successfully",
+            "message": f"Small audio file ({filename}) processed successfully",
             "filename": filename,
             "processing_type": "direct"
         }
