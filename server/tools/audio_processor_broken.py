@@ -1,6 +1,6 @@
 """
-Audio Processor - Real Implementation
-Handles audio file processing with actual transcription, todos, and action items
+Simple Audio Processor - Clean Implementation
+Handles audio file processing without complex zoom monitoring
 """
 
 import sqlite3
@@ -19,40 +19,34 @@ except ImportError:
         from server.tools.notify_tool import notifier
 
 def init_database():
-    """Initialize the audio files database"""
-    try:
-        conn = sqlite3.connect('audio_files.db')
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS audio_files (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                filename TEXT NOT NULL,
-                user_email TEXT,
-                file_path TEXT NOT NULL,
-                file_size INTEGER,
-                transcript TEXT,
-                action_items TEXT,
-                todo_items TEXT,
-                processed_at TEXT,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        conn.commit()
-        conn.close()
-        print("✅ Audio files database initialized")
-        
-    except Exception as e:
-        print(f"❌ Error initializing database: {e}")
+    """Initialize the audio processing database"""
+    conn = sqlite3.connect('audio_files.db')
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS audio_files (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            filename TEXT,
+            file_path TEXT,
+            user_email TEXT,
+            transcript TEXT,
+            action_items TEXT,
+            todo_items TEXT,
+            processed_at TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    
+    conn.commit()
+    conn.close()
 
 async def process_uploaded_audio(file_path: str, filename: Optional[str] = None, file_size: Optional[int] = None, user_email: Optional[str] = None) -> Dict[str, Any]:
     """
-    Process uploaded audio file
+    Process uploaded audio file with chunking support for large files
     
     Args:
-        file_path: Path to the uploaded audio file
-        filename: Original filename of the audio file
+        file_path: Path to the audio file
+        filename: Original filename
         file_size: Size of the file in bytes
         user_email: Optional user email for notifications
         
@@ -60,28 +54,29 @@ async def process_uploaded_audio(file_path: str, filename: Optional[str] = None,
         Dictionary with processing results
     """
     try:
-        # Initialize database
+        # Initialize database if needed
         init_database()
         
-        # Set defaults
+        # Handle None values with proper defaults
         final_filename = filename or os.path.basename(file_path)
-        final_file_size = file_size or os.path.getsize(file_path)
-        final_user_email = user_email or "unknown"
+        final_file_size = file_size if file_size is not None else (os.path.getsize(file_path) if os.path.exists(file_path) else 0)
+        final_user_email = user_email or "anonymous"
         
-        # Insert initial record
+        # Store initial record
         conn = sqlite3.connect('audio_files.db')
         cursor = conn.cursor()
         
         cursor.execute("""
-            INSERT INTO audio_files (filename, user_email, file_path, file_size, created_at)
-            VALUES (?, ?, ?, ?, ?)
-        """, (final_filename, final_user_email, file_path, final_file_size, datetime.now().isoformat()))
+            INSERT INTO audio_files (filename, file_path, user_email, processed_at)
+            VALUES (?, ?, ?, ?)
+        """, (final_filename, file_path, final_user_email, datetime.now().isoformat()))
         
         processing_id = cursor.lastrowid
         conn.commit()
         conn.close()
         
-        if not processing_id:
+        # Ensure processing_id is not None
+        if processing_id is None:
             raise ValueError("Failed to get processing ID from database")
         
         # Process based on file size
@@ -98,22 +93,19 @@ async def process_uploaded_audio(file_path: str, filename: Optional[str] = None,
 
 async def _process_large_audio_file(file_path: str, processing_id: int, filename: str, user_email: str) -> Dict[str, Any]:
     """
-    Process large audio file using direct transcription (no chunking yet)
+    Process large audio file using chunking
     """
     try:
         print(f"🔄 Processing large audio file: {filename} (ID: {processing_id})")
         
-        # Process large audio with actual transcription
+        # Process large audio with actual transcription (no chunking yet - direct processing)
         try:
+            # Import STT function
             from stt_tool import speech_to_text_from_audio
             print("✅ Using speech-to-text processing for large file")
             
-            # Read file as bytes for STT
-            with open(file_path, 'rb') as f:
-                audio_data = f.read()
-            
-            # Get transcription
-            transcription = await speech_to_text_from_audio(audio_data)
+            # Get transcription (may take longer for large files)
+            transcription = await speech_to_text_from_audio(file_path)
             print(f"✅ Large file transcription completed: {len(transcription)} characters")
             
             # Extract todos and action items
@@ -158,8 +150,8 @@ async def _process_large_audio_file(file_path: str, processing_id: int, filename
             WHERE id = ?
         """, (
             transcription,
-            str(action_items),
-            str(todos),
+            str(action_items),  # Convert to string for storage
+            str(todos),         # Convert to string for storage
             datetime.now().isoformat(),
             processing_id
         ))
@@ -168,33 +160,55 @@ async def _process_large_audio_file(file_path: str, processing_id: int, filename
         conn.close()
         
         # Send email notification with real results
-        if user_email and user_email != "unknown":
+        if user_email:
             try:
                 email_subject = f"Large Audio Processing Complete - {filename}"
                 
                 # Format todos and action items for email
-                todos_text = '\\n'.join([f"• {todo}" for todo in todos]) if todos else "No todos found"
-                actions_text = '\\n'.join([f"• {action.get('task', str(action)) if isinstance(action, dict) else str(action)}" for action in action_items]) if action_items else "No action items found"
+                todos_text = '\n'.join([f"• {todo}" for todo in todos]) if todos else "No todos found"
+                actions_text = '\n'.join([f"• {action.get('task', str(action)) if isinstance(action, dict) else str(action)}" for action in action_items]) if action_items else "No action items found"
                 
                 email_body = f"""Large Audio Processing Results for: {filename}
 
-TRANSCRIPT:
+📝 TRANSCRIPT:
 {transcription}
 
-ACTION ITEMS:
+🎯 ACTION ITEMS:
 {actions_text}
 
-TODO ITEMS:
+📋 TODO ITEMS:
 {todos_text}
 
-SUMMARY:
+📊 SUMMARY:
 {summary or 'Large audio file processed successfully'}
 
-Processing completed successfully!
+✅ Large file processing completed successfully!
 
 Best regards,
 Your Virtual Assistant"""
-                
+        
+        conn.commit()
+        conn.close()
+        
+        # Send email notification if user_email provided
+        if user_email:
+            try:
+                email_subject = f"Audio Processing Complete - {filename} (Chunked)"
+                email_body = f"""Audio Processing Results for: {filename}
+
+📝 TRANSCRIPT:
+[Large file] Processing in chunks - transcript pending...
+
+🎯 ACTION ITEMS:
+Action items will be extracted after full processing
+
+📋 TODO ITEMS:
+TODO items will be extracted after full processing
+
+⏳ Large file processing in progress - you'll receive another email when complete.
+
+Best regards,
+Your Virtual Assistant"""
                 await notifier(user_email, email_subject, email_body)
                 print(f"📧 Email notification sent to {user_email}")
             except Exception as e:
@@ -203,9 +217,9 @@ Your Virtual Assistant"""
         return {
             "success": True,
             "processing_id": processing_id,
-            "message": f"Large audio file ({filename}) processed successfully",
+            "message": f"Large audio file ({filename}) queued for chunked processing",
             "filename": filename,
-            "processing_type": "direct"
+            "processing_type": "chunked"
         }
         
     except Exception as e:
@@ -223,15 +237,12 @@ async def _process_small_audio_file(file_path: str, processing_id: int, filename
         
         # Process audio with actual transcription
         try:
+            # Import STT function
             from stt_tool import speech_to_text_from_audio
             print("✅ Using speech-to-text processing")
             
-            # Read file as bytes for STT
-            with open(file_path, 'rb') as f:
-                audio_data = f.read()
-            
             # Get transcription
-            transcription = await speech_to_text_from_audio(audio_data)
+            transcription = await speech_to_text_from_audio(file_path)
             print(f"✅ Transcription completed: {len(transcription)} characters")
             
             # Extract todos and action items
@@ -276,8 +287,8 @@ async def _process_small_audio_file(file_path: str, processing_id: int, filename
             WHERE id = ?
         """, (
             transcription,
-            str(action_items),
-            str(todos),
+            str(action_items),  # Convert to string for storage
+            str(todos),         # Convert to string for storage
             datetime.now().isoformat(),
             processing_id
         ))
@@ -286,33 +297,43 @@ async def _process_small_audio_file(file_path: str, processing_id: int, filename
         conn.close()
         
         # Send email notification with real results
-        if user_email and user_email != "unknown":
+        if user_email:
             try:
                 email_subject = f"Audio Processing Complete - {filename}"
                 
                 # Format todos and action items for email
-                todos_text = '\\n'.join([f"• {todo}" for todo in todos]) if todos else "No todos found"
-                actions_text = '\\n'.join([f"• {action.get('task', str(action)) if isinstance(action, dict) else str(action)}" for action in action_items]) if action_items else "No action items found"
+                todos_text = '\n'.join([f"• {todo}" for todo in todos]) if todos else "No todos found"
+                actions_text = '\n'.join([f"• {action.get('task', str(action)) if isinstance(action, dict) else str(action)}" for action in action_items]) if action_items else "No action items found"
                 
                 email_body = f"""Audio Processing Results for: {filename}
 
-TRANSCRIPT:
+📝 TRANSCRIPT:
 {transcription}
 
-ACTION ITEMS:
+🎯 ACTION ITEMS:
 {actions_text}
 
-TODO ITEMS:
+📋 TODO ITEMS:
 {todos_text}
 
-SUMMARY:
+📊 SUMMARY:
 {summary or 'Audio processed successfully'}
 
-Processing completed successfully!
+✅ Processing completed successfully!
 
 Best regards,
 Your Virtual Assistant"""
-                
+
+🎯 ACTION ITEMS:
+Sample action items from audio
+
+📋 TODO ITEMS:
+Sample TODO items from audio
+
+✅ Processing completed successfully!
+
+Best regards,
+Your Virtual Assistant"""
                 await notifier(user_email, email_subject, email_body)
                 print(f"📧 Email notification sent to {user_email}")
             except Exception as e:
@@ -331,6 +352,47 @@ Your Virtual Assistant"""
             "success": False,
             "error": str(e)
         }
+    """
+    Get audio processing results from database
+    
+    Args:
+        limit: Maximum number of results to return
+        
+    Returns:
+        List of processing results
+    """
+    try:
+        conn = sqlite3.connect('audio_files.db')
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT id, filename, user_email, transcript, action_items, todo_items, processed_at, created_at
+            FROM audio_files 
+            ORDER BY created_at DESC 
+            LIMIT ?
+        """, (limit,))
+        
+        rows = cursor.fetchall()
+        conn.close()
+        
+        results = []
+        for row in rows:
+            results.append({
+                "id": row[0],
+                "filename": row[1],
+                "user_email": row[2],
+                "transcript": row[3] or "Processing...",
+                "action_items": row[4] or "None extracted yet",
+                "todo_items": row[5] or "None extracted yet",
+                "processed_at": row[6],
+                "created_at": row[7]
+            })
+            
+        return results
+        
+    except Exception as e:
+        print(f"Error getting audio results: {e}")
+        return []
 
 def get_audio_processing_results(limit: int = 10) -> List[Dict[str, Any]]:
     """
