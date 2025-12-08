@@ -262,6 +262,16 @@ class ZoomWebhookHandler:
         
         print(f"🔴 Meeting ended: {meeting_id}")
         
+        # Notify the meeting monitor that recording has ended
+        try:
+            from .zoom_meeting_monitor import zoom_monitor
+            if zoom_monitor.current_meeting_id == meeting_id:
+                zoom_monitor.recording_active = False
+                zoom_monitor.current_meeting_id = None
+                print(f"📄 Updated monitor state - meeting {meeting_id} recording stopped")
+        except Exception as e:
+            print(f"⚠️ Could not update monitor state: {e}")
+        
         # TODO: Trigger post-meeting processing
         # This could include:
         # - Generating meeting summary

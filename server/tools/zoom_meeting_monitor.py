@@ -115,6 +115,7 @@ class ZoomMeetingMonitor:
             if result.get('success'):
                 self.recording_active = True
                 self.current_meeting_id = meeting_id
+                self.is_monitoring = True  # Ensure monitoring is active during recording
                 print(f"✅ Background recording started for meeting {meeting_id}")
             else:
                 print(f"❌ Failed to start recording: {result.get('error')}")
