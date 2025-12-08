@@ -29,10 +29,8 @@ from tools.calendar_tool import handle_calendar_request, contains_calendar_inten
 from tools.mobile_calendar_auth import get_mobile_auth_url, handle_mobile_auth_callback, get_calendar_service_mobile, is_mobile_authenticated
 from tools.todo_tool import extract_and_process_todos, todo_manager
 from tools.zoom_oauth_tool import get_zoom_auth_url, handle_zoom_oauth_callback, get_zoom_access_token, is_zoom_authenticated
-from tools.zoom_webhook_tool import zoom_webhook_handler
-from tools.zoom_meeting_tool import detect_zoom_meetings, parse_zoom_meeting_url, process_text_for_zoom_meetings, get_recent_zoom_meetings
-from tools.zoom_meeting_monitor import start_meeting_monitor, stop_meeting_monitor, get_monitor_status
-from tools.personal_meeting_recorder import start_personal_recording, stop_personal_recording, get_personal_recording_status
+from tools.audio_processor import process_uploaded_audio, get_audio_processing_results
+from tools.zoom_cloud_retriever import get_completed_zoom_meetings, process_zoom_meeting_recording, check_new_zoom_meetings
 
 # Initialize FastMCP server
 server = FastMCP("voice_agent_server")
@@ -1212,10 +1210,11 @@ async def detect_zoom_meetings_api(request: Request):
                 "error": "No text provided"
             }, status_code=400)
         
-        # Process text for Zoom meetings
-        result = await process_text_for_zoom_meetings(text)
-        
-        return JSONResponse(result)
+        # Zoom meeting detection removed
+        return JSONResponse({
+            "meetings_detected": False,
+            "error": "Zoom meeting detection removed - please upload audio files directly"
+        })
         
     except Exception as e:
         return JSONResponse({
@@ -1278,13 +1277,14 @@ async def get_recent_meetings_api(request: Request):
     ```
     """
     try:
-        limit = int(request.query_params.get('limit', 10))
-        meetings = get_recent_zoom_meetings(limit)
+        # Recent meetings removed
+        meetings = []
         
         return JSONResponse({
-            "success": True,
-            "meetings": meetings,
-            "count": len(meetings)
+            "success": False,
+            "meetings": [],
+            "count": 0,
+            "error": "Zoom meeting list removed - please upload audio files directly"
         })
         
     except Exception as e:
@@ -1295,403 +1295,79 @@ async def get_recent_meetings_api(request: Request):
 
 @app.post("/api/zoom/monitor/start")
 async def start_zoom_monitor_api(request: Request):
-    """
-    🎯 START AUTOMATIC ZOOM MEETING MONITORING
-    
-    FLUTTER INTEGRATION:
-    ===================
-    
-    HTTP Method: POST
-    URL: {base_url}/api/zoom/monitor/start
-    Content-Type: application/json
-    
-    Response (Success):
-    -----------------
-    {
-        "success": true,
-        "message": "Zoom meeting monitoring started",
-        "status": {
-            "is_monitoring": true,
-            "recording_active": false,
-            "current_meeting_id": null
-        }
-    }
-    
-    Flutter Example:
-    --------------
-    ```dart
-    Future<void> startZoomMonitoring() async {
-        try {
-            var response = await http.post(
-                Uri.parse('$baseUrl/api/zoom/monitor/start'),
-                headers: {'Content-Type': 'application/json'}
-            );
-            var data = json.decode(response.body);
-            
-            if (data['success']) {
-                print('✅ Monitoring started');
-            }
-        } catch (e) {
-            print('❌ Error starting monitoring: $e');
-        }
-    }
-    ```
-    """
-    try:
-        start_meeting_monitor()
-        status = get_monitor_status()
-        
-        return JSONResponse({
-            "success": True,
-            "message": "Zoom meeting monitoring started",
-            "status": status
-        })
-        
-    except Exception as e:
-        return JSONResponse({
-            "success": False,
-            "error": str(e)
-        }, status_code=500)
+    """Zoom monitoring has been removed - use audio upload instead"""
+    return JSONResponse({
+        "success": False,
+        "error": "Zoom monitoring removed - please upload audio files directly"
+    }, status_code=410)
 
 @app.post("/api/zoom/monitor/stop")
 async def stop_zoom_monitor_api(request: Request):
-    """
-    🛑 STOP AUTOMATIC ZOOM MEETING MONITORING
-    
-    FLUTTER INTEGRATION:
-    ===================
-    
-    HTTP Method: POST
-    URL: {base_url}/api/zoom/monitor/stop
-    
-    Response (Success):
-    -----------------
-    {
-        "success": true,
-        "message": "Zoom meeting monitoring stopped",
-        "status": {
-            "is_monitoring": false,
-            "recording_active": false,
-            "current_meeting_id": null
-        }
-    }
-    
-    Flutter Example:
-    --------------
-    ```dart
-    Future<void> stopZoomMonitoring() async {
-        try {
-            var response = await http.post(
-                Uri.parse('$baseUrl/api/zoom/monitor/stop'),
-                headers: {'Content-Type': 'application/json'}
-            );
-            var data = json.decode(response.body);
-            
-            if (data['success']) {
-                print('🛑 Monitoring stopped');
-            }
-        } catch (e) {
-            print('❌ Error stopping monitoring: $e');
-        }
-    }
-    ```
-    """
-    try:
-        stop_meeting_monitor()
-        status = get_monitor_status()
-        
-        return JSONResponse({
-            "success": True,
-            "message": "Zoom meeting monitoring stopped",
-            "status": status
-        })
-        
-    except Exception as e:
-        return JSONResponse({
-            "success": False,
-            "error": str(e)
-        }, status_code=500)
+    """Zoom monitoring has been removed - use audio upload instead"""
+    return JSONResponse({
+        "success": False,
+        "error": "Zoom monitoring removed - please upload audio files directly"
+    }, status_code=410)
 
 @app.get("/api/zoom/monitor/status")
 async def get_zoom_monitor_status_api(request: Request):
-    """
-    📊 GET ZOOM MEETING MONITORING STATUS
-    
-    FLUTTER INTEGRATION:
-    ===================
-    
-    HTTP Method: GET
-    URL: {base_url}/api/zoom/monitor/status
-    
-    Response:
-    --------
-    {
-        "success": true,
-        "status": {
-            "is_monitoring": true,
-            "recording_active": false,
-            "current_meeting_id": null
-        }
-    }
-    
-    Flutter Example:
-    --------------
-    ```dart
-    Future<Map<String, dynamic>> getMonitoringStatus() async {
-        try {
-            var response = await http.get(
-                Uri.parse('$baseUrl/api/zoom/monitor/status')
-            );
-            var data = json.decode(response.body);
-            
-            if (data['success']) {
-                return data['status'];
-            }
-            return {};
-        } catch (e) {
-            return {};
-        }
-    }
-    ```
-    """
-    try:
-        status = get_monitor_status()
-        
-        return JSONResponse({
-            "success": True,
-            "status": status
-        })
-        
-    except Exception as e:
-        return JSONResponse({
-            "success": False,
-            "error": str(e)
-        }, status_code=500)
+    """Zoom monitoring has been removed - use audio upload instead"""
+    return JSONResponse({
+        "success": False,
+        "error": "Zoom monitoring removed - please upload audio files directly"
+    }, status_code=410)
 
 @app.post("/api/zoom/monitor/trigger")
 async def trigger_zoom_meeting_api(request: Request):
-    """
-    🎯 TRIGGER ZOOM MEETING RECORDING
-    
-    For Azure server deployment - manually trigger meeting recording when user provides meeting URL
-    
-    Body:
-    ----
-    {
-        "meeting_id": "123456789",
-        "meeting_url": "https://zoom.us/j/123456789",
-        "topic": "Optional meeting topic"
-    }
-    
-    Response:
-    --------
-    {
-        "success": true,
-        "message": "Recording started for meeting 123456789"
-    }
-    """
-    try:
-        data = await request.json()
-        meeting_id = data.get('meeting_id')
-        
-        if not meeting_id:
-            return JSONResponse({
-                "success": False,
-                "error": "meeting_id is required"
-            }, status_code=400)
-        
-        from tools.zoom_meeting_monitor import zoom_monitor
-        result = await zoom_monitor.trigger_meeting_recording(meeting_id, data)
-        
-        return JSONResponse(result)
-        
-    except Exception as e:
-        return JSONResponse({
-            "success": False,
-            "error": str(e)
-        }, status_code=500)
+    """Zoom monitoring has been removed - use audio upload instead"""
+    return JSONResponse({
+        "success": False,
+        "error": "Zoom monitoring removed - please upload audio files directly"
+    }, status_code=410)
 
 @app.post("/api/zoom/monitor/detect-url")
 async def detect_zoom_meeting_url_api(request: Request):
-    """
-    🔗 DETECT ZOOM MEETING FROM URL
-    
-    Automatically extract meeting ID from Zoom URL and start recording
-    
-    Body:
-    ----
-    {
-        "url": "https://zoom.us/j/123456789?pwd=abc123"
-    }
-    
-    Response:
-    --------
-    {
-        "success": true,
-        "message": "Recording started for meeting 123456789",
-        "meeting_id": "123456789"
-    }
-    """
-    try:
-        data = await request.json()
-        url = data.get('url')
-        
-        if not url:
-            return JSONResponse({
-                "success": False,
-                "error": "url is required"
-            }, status_code=400)
-        
-        from tools.zoom_meeting_monitor import zoom_monitor
-        result = await zoom_monitor.detect_meeting_from_url(url)
-        
-        return JSONResponse(result)
-        
-    except Exception as e:
-        return JSONResponse({
-            "success": False,
-            "error": str(e)
-        }, status_code=500)
+    """Zoom monitoring has been removed - use audio upload instead"""
+    return JSONResponse({
+        "success": False,
+        "error": "Zoom monitoring removed - please upload audio files directly"
+    }, status_code=410)
 
 @app.post("/api/zoom/monitor/reset")
 async def reset_zoom_monitor_api(request: Request):
-    """
-    🔄 RESET ZOOM MEETING MONITOR
-    
-    Reset monitor state to allow new recordings
-    
-    Response:
-    --------
-    {
-        "success": true,
-        "message": "Monitor state reset"
-    }
-    """
-    try:
-        from tools.zoom_meeting_monitor import reset_monitor
-        await reset_monitor()
-        
-        return JSONResponse({
-            "success": True,
-            "message": "Monitor state reset"
-        })
-        
-    except Exception as e:
-        return JSONResponse({
-            "success": False,
-            "error": str(e)
-        }, status_code=500)
+    """Zoom monitoring has been removed - use audio upload instead"""
+    return JSONResponse({
+        "success": False,
+        "error": "Zoom monitoring removed - please upload audio files directly"
+    }, status_code=410)
 
 @app.post("/api/zoom/recording/start")
-async def start_personal_recording_api(request: Request):
-    """
-    🎤 START PERSONAL MEETING RECORDING
-    
-    Start recording audio from your microphone during Zoom meeting
-    
-    Request Body:
-    ------------
-    {
-        "meeting_url": "https://zoom.us/j/123456789"
-    }
-    
-    Response:
-    --------
-    {
-        "success": true,
-        "session_id": "personal_123456789_1640000000",
-        "meeting_id": "123456789",
-        "audio_file": "recordings/meeting_123456789_20250108_100000.wav",
-        "message": "Personal recording started"
-    }
-    """
-    try:
-        body = await request.json()
-        meeting_url = body.get('meeting_url')
-        
-        if not meeting_url:
-            return JSONResponse({
-                "success": False,
-                "error": "meeting_url is required"
-            }, status_code=400)
-        
-        # Extract meeting ID from URL
-        from tools.zoom_meeting_tool import parse_zoom_meeting_url
-        meeting_info = parse_zoom_meeting_url(meeting_url)
-        
-        if not meeting_info or not meeting_info.get('meeting_id'):
-            return JSONResponse({
-                "success": False,
-                "error": "Invalid meeting URL"
-            }, status_code=400)
-        
-        meeting_id = meeting_info['meeting_id']
-        result = start_personal_recording(meeting_id, meeting_url)
-        
-        if result.get('success'):
-            return JSONResponse(result)
-        else:
-            return JSONResponse(result, status_code=400)
-        
-    except Exception as e:
-        return JSONResponse({
-            "success": False,
-            "error": str(e)
-        }, status_code=500)
+async def start_meeting_tracking_api(request: Request):
+    """Zoom recording tracking has been removed - use audio upload instead"""
+    return JSONResponse({
+        "success": False,
+        "error": "Zoom recording tracking removed - please upload audio files directly"
+    }, status_code=410)
 
 @app.post("/api/zoom/recording/stop")
-async def stop_personal_recording_api(request: Request):
-    """
-    🛑 STOP PERSONAL MEETING RECORDING
-    
-    Stop recording audio from your microphone
-    
-    Response:
-    --------
-    {
-        "success": true,
-        "message": "Personal recording stopped"
-    }
-    """
-    try:
-        result = stop_personal_recording()
-        return JSONResponse(result)
-        
-    except Exception as e:
-        return JSONResponse({
-            "success": False,
-            "error": str(e)
-        }, status_code=500)
+async def stop_meeting_tracking_api(request: Request):
+    """Zoom recording tracking has been removed - use audio upload instead"""
+    return JSONResponse({
+        "success": False,
+        "error": "Zoom recording tracking removed - please upload audio files directly"
+    }, status_code=410)
 
 @app.get("/api/zoom/recording/status")
-async def get_personal_recording_status_api():
-    """
-    📊 GET PERSONAL RECORDING STATUS
-    
-    Get status of personal audio recording
-    
-    Response:
-    --------
-    {
-        "is_recording": true,
-        "current_meeting_id": "123456789",
-        "recording_active": true,
-        "audio_device_ready": true
-    }
-    """
-    try:
-        status = get_personal_recording_status()
-        return JSONResponse(status)
-        
-    except Exception as e:
-        return JSONResponse({
-            "success": False,
-            "error": str(e)
-        }, status_code=500)
+async def get_meeting_tracking_status_api():
+    """Zoom recording tracking has been removed - use audio upload instead"""
+    return JSONResponse({
+        "success": False,
+        "error": "Zoom recording tracking removed - please upload audio files directly"
+    }, status_code=410)
 
 @app.get("/api/zoom/recording/results")
-async def get_personal_recording_results_api(request: Request):
-    """📋 GET PROCESSED MEETING RESULTS - Auto-processed recordings with transcripts and summaries"""
+async def get_processed_meeting_results_api(request: Request):
+    """📋 GET PROCESSED MEETING RESULTS - Downloaded from Zoom cloud and processed"""
     try:
         import sqlite3
         
@@ -1702,43 +1378,136 @@ async def get_personal_recording_results_api(request: Request):
         cur = conn.cursor()
         
         query = """
-            SELECT r.recording_session_id, r.meeting_id, r.start_time, r.end_time, r.duration_seconds,
-                   r.audio_file_path, s.summary_text, s.action_items, s.todo_items, t.transcript_chunk
-            FROM personal_meeting_recordings r
-            LEFT JOIN meeting_summaries s ON r.recording_session_id = s.recording_session_id
-            LEFT JOIN personal_transcripts t ON r.recording_session_id = t.recording_session_id AND t.chunk_number = -1
-            WHERE r.status = 'completed'
+            SELECT meeting_id, transcript, action_items, todo_items, processed_at
+            FROM processed_meetings
+            WHERE 1=1
         """
         
         params = []
         if meeting_id:
-            query += " AND r.meeting_id = ?"
+            query += " AND meeting_id = ?"
             params.append(meeting_id)
         
-        query += " ORDER BY r.created_at DESC LIMIT ?"
+        query += " ORDER BY processed_at DESC LIMIT ?"
         params.append(limit)
         
         cur.execute(query, params)
         rows = cur.fetchall()
         
-        recordings = []
+        meetings = []
         for row in rows:
-            recordings.append({
-                "session_id": row[0],
-                "meeting_id": row[1], 
-                "start_time": row[2],
-                "end_time": row[3],
-                "duration_seconds": row[4],
-                "audio_file": row[5],
-                "summary": row[6] or "Processing...",
-                "action_items": eval(row[7]) if row[7] else [],
-                "todo_items": eval(row[8]) if row[8] else [],
-                "transcript": row[9] or "Processing..."
+            meetings.append({
+                "meeting_id": row[0],
+                "transcript": row[1] or "No transcript available",
+                "action_items": eval(row[2]) if row[2] else [],
+                "todo_items": eval(row[3]) if row[3] else [],
+                "processed_at": row[4],
+                "source": "zoom_cloud_download"
             })
         
         conn.close()
         
-        return JSONResponse({"success": True, "recordings": recordings})
+        return JSONResponse({"success": True, "meetings": meetings})
+        
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+@app.post("/api/audio/upload")
+async def upload_audio_file(file: UploadFile = File(...), user_email: str = Form(None)):
+    """
+    🎧 UPLOAD AUDIO FILE FOR PROCESSING
+    
+    Upload an audio file for transcription and analysis
+    
+    Form Data:
+    ----------
+    file: Audio file (MP3, WAV, M4A, etc.)
+    user_email: Optional email for notifications (optional)
+    
+    Response:
+    --------
+    {
+        "success": true,
+        "file_id": 123,
+        "filename": "audio_20250108_120000.mp3",
+        "message": "Audio file uploaded and processing started",
+        "email_notification": true
+    }
+    """
+    try:
+        import os
+        
+        # Validate file type
+        allowed_extensions = ['.mp3', '.wav', '.m4a', '.mp4', '.webm', '.ogg']
+        filename = file.filename or 'unknown'
+        file_ext = os.path.splitext(filename)[1].lower()
+        
+        if file_ext not in allowed_extensions:
+            return JSONResponse({
+                "success": False,
+                "error": f"File type {file_ext} not supported. Allowed: {', '.join(allowed_extensions)}"
+            }, status_code=400)
+        
+        # Create uploads directory
+        upload_dir = "uploads"
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        # Save uploaded file
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        saved_filename = f"upload_{timestamp}{file_ext}"
+        file_path = os.path.join(upload_dir, saved_filename)
+        
+        # Write file to disk
+        with open(file_path, "wb") as f:
+            content = await file.read()
+            f.write(content)
+        
+        # Process the file with email support
+        result = await process_uploaded_audio(file_path, file.filename or "uploaded_file", len(content), user_email)
+        
+        return JSONResponse(result)
+        
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+@app.get("/api/audio/results")
+async def get_audio_processing_results_api(request: Request):
+    """
+    📋 GET AUDIO PROCESSING RESULTS
+    
+    Get processed audio files with transcripts and analysis
+    
+    Query Parameters:
+    ---------------
+    - limit: Number of files to return (default 10)
+    
+    Response:
+    --------
+    {
+        "success": true,
+        "files": [
+            {
+                "id": 123,
+                "filename": "recording.mp3",
+                "transcript": "Audio transcript content...",
+                "summary": "Summary of the audio...",
+                "action_items": ["Task 1", "Task 2"],
+                "todo_items": ["Todo 1", "Todo 2"],
+                "status": "completed"
+            }
+        ]
+    }
+    """
+    try:
+        limit = int(request.query_params.get('limit', 10))
+        files = get_audio_processing_results(limit)
+        
+        return JSONResponse({
+            "success": True,
+            "files": files,
+            "count": len(files)
+        })
         
     except Exception as e:
         return JSONResponse({"success": False, "error": str(e)}, status_code=500)
@@ -1914,18 +1683,11 @@ async def zoom_webhook_endpoint(request: Request):
         print(f"   Content-Type: {headers.get('content-type', 'None')}")
         print(f"   User-Agent: {headers.get('user-agent', 'None')}")
         
-        # Process webhook with signature verification
-        result = await zoom_webhook_handler.handle_webhook_event(request)
-        
-        if result.get("success"):
-            print(f"✅ Webhook processed successfully")
-            return JSONResponse({"success": True})
-        else:
-            print(f"❌ Webhook processing failed: {result.get('error')}")
-            return JSONResponse({
-                "success": False,
-                "error": result.get("error")
-            }, status_code=400)
+        # Zoom webhook handler removed
+        return JSONResponse({
+            "success": False,
+            "error": "Zoom webhook handler removed"
+        }, status_code=410)
             
     except Exception as e:
         print(f"❌ Webhook processing error: {e}")
@@ -2042,7 +1804,8 @@ async def process_chat_message(message: str) -> str:
     """Process chat message and return response"""
     try:
         # Detect if message contains Zoom meeting URLs
-        meetings = detect_zoom_meetings(message)
+        # Zoom meeting detection removed
+        meetings = []
         if meetings:
             return f"🔗 I found {len(meetings)} Zoom meeting(s) in your message. Would you like me to process them?"
         
@@ -2256,7 +2019,69 @@ if __name__ == "__main__":
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
-    async def main():
+    # =============================================================================
+# ZOOM CLOUD MEETING ENDPOINTS
+# =============================================================================
+
+@app.get("/api/zoom/meetings/completed")
+async def get_completed_meetings_api(request: Request):
+    """Get completed zoom meetings from cloud"""
+    try:
+        days_back = int(request.query_params.get('days', 1))
+        meetings = await get_completed_zoom_meetings(days_back)
+        
+        return JSONResponse({
+            "success": True,
+            "meetings": meetings,
+            "count": len(meetings)
+        })
+        
+    except Exception as e:
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        }, status_code=500)
+
+@app.post("/api/zoom/meetings/process")
+async def process_zoom_meeting_api(request: Request):
+    """Process a specific zoom meeting recording"""
+    try:
+        data = await request.json()
+        meeting_id = data.get('meeting_id')
+        
+        if not meeting_id:
+            return JSONResponse({
+                "success": False,
+                "error": "meeting_id is required"
+            }, status_code=400)
+        
+        result = await process_zoom_meeting_recording(meeting_id)
+        return JSONResponse(result)
+        
+    except Exception as e:
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        }, status_code=500)
+
+@app.post("/api/zoom/meetings/check-new")
+async def check_new_meetings_api():
+    """Check for new completed meetings and process them"""
+    try:
+        result = await check_new_zoom_meetings()
+        return JSONResponse(result)
+        
+    except Exception as e:
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        }, status_code=500)
+
+# =============================================================================
+# SERVER STARTUP
+# =============================================================================
+
+async def main():
         """
         Main function to run the MCP server with error handling.
         """
@@ -2269,10 +2094,8 @@ if __name__ == "__main__":
             zoom_oauth_manager._init_database()
             print("✅ Zoom database tables initialized")
             
-            # Start automatic Zoom meeting monitoring
-            print("🎯 Starting automatic Zoom meeting monitoring...")
-            start_meeting_monitor()
-            print("✅ Zoom meeting monitoring started")
+            # Zoom meeting monitoring removed
+            print("ℹ️ Zoom meeting monitoring has been removed - use audio upload instead")
             
             # Start ASGI server with error handling
             config = uvicorn.Config(app, host="0.0.0.0", port=8000, log_level="info")
@@ -2297,12 +2120,14 @@ if __name__ == "__main__":
 
             # Run the ASGI server (this runs the event loop)
             await asgi_server.serve()
+            
         except Exception as main_error:
             print(f"❌ Main server startup error: {main_error}")
             import traceback
             print(f"❌ Traceback: {traceback.format_exc()}")
             raise  # Re-raise to be caught by outer handler
 
+if __name__ == "__main__":
     # Run the main function with comprehensive error handling and auto-restart
     restart_count = 0
     max_restarts = 3
@@ -2310,34 +2135,22 @@ if __name__ == "__main__":
     while restart_count < max_restarts:
         try:
             print(f"🚀 Initializing HTTP Voice Assistant server (attempt {restart_count + 1}/{max_restarts})...")
-            # Initialize FastMCP tools
-            server.tool()(process_voice)
-            server.tool()(speech_to_text_tool)
-            server.tool()(todo_manager)
-            server.tool()(notifier)
-            server.tool()(extract_action_tasks)
-            server.tool()(extract_and_process_todos)
-            server.tool()(handle_calendar_request)
-            
             asyncio.run(main())
-            # If we get here, server stopped normally
-            break
+            break  # Exit loop if successful
+            
         except KeyboardInterrupt:
-            print("\n🛑 Server stopped by user (Ctrl+C)")
-            print("👋 Goodbye!")
+            print("\n🛑 Server stopped by user")
             break
+            
         except Exception as e:
             restart_count += 1
-            print(f"💥 Critical server error: {e}")
-            import traceback
-            print(f"🔍 Full traceback:\n{traceback.format_exc()}")
+            print(f"❌ Server error (attempt {restart_count}): {e}")
             
             if restart_count < max_restarts:
-                print(f"🔄 Attempting auto-restart ({restart_count}/{max_restarts})...")
-                time.sleep(2)  # Wait before restart
+                print(f"🔄 Restarting in 5 seconds...")
+                import time
+                time.sleep(5)
             else:
-                print(f"❌ Maximum restart attempts reached ({max_restarts})")
-                print("🛑 Server shutdown - manual intervention required")
-                exit(1)
-        finally:
-            print("🔒 Server cleanup complete")
+                print("❌ Maximum restart attempts reached. Exiting.")
+                break
+            server.tool()(extract_action_tasks)
