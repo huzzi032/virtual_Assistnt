@@ -1467,7 +1467,7 @@ async def upload_audio_file(file: UploadFile = File(...), user_email: str = Form
         import os
         
         # Validate file type
-        allowed_extensions = ['.mp3', '.wav', '.m4a', '.mp4', '.webm', '.ogg']
+        allowed_extensions = ['.mp3', '.wav', '.m4a', '.mp4', '.webm', '.ogg', '.opus', '.aac', '.3gp']
         filename = file.filename or 'unknown'
         file_ext = os.path.splitext(filename)[1].lower()
         
