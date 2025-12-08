@@ -205,7 +205,11 @@ Your Virtual Assistant"""
             "processing_id": processing_id,
             "message": f"Large audio file ({filename}) processed successfully",
             "filename": filename,
-            "processing_type": "direct"
+            "processing_type": "direct",
+            "transcription": transcription,
+            "action_items": action_items,
+            "todo_items": todos,
+            "summary": summary or "Large audio file processed successfully"
         }
         
     except Exception as e:
@@ -323,7 +327,11 @@ Your Virtual Assistant"""
             "processing_id": processing_id,
             "message": f"Small audio file ({filename}) processed successfully",
             "filename": filename,
-            "processing_type": "direct"
+            "processing_type": "direct",
+            "transcription": transcription,
+            "action_items": action_items,
+            "todo_items": todos,
+            "summary": summary or "Audio processed successfully"
         }
         
     except Exception as e:
