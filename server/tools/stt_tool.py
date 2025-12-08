@@ -200,6 +200,102 @@ class GPT4oHTTPSTT:
                         
         except Exception as e:
             return False, audio_data, f"ffmpeg setup failed: {e}"
+    
+    async def transcribe_audio(self, audio_data: bytes, file_format: str = "unknown") -> dict:
+        """
+        Transcribe audio with format detection and direct Azure submission
+        
+        Args:
+            audio_data: Raw audio bytes
+            file_format: Detected file format (wav, mp3, aac, etc.)
+            
+        Returns:
+            dict: {"success": bool, "transcription": str, "error": str}
+        """
+        try:
+            print(f"🎵 Transcribing {file_format} audio: {len(audio_data)} bytes")
+            
+            # Map format to content type
+            content_types = {
+                "wav": "audio/wav",
+                "mp3": "audio/mpeg", 
+                "aac": "audio/aac",
+                "m4a": "audio/mp4",
+                "ogg": "audio/ogg",
+                "opus": "audio/ogg",
+                "3gp": "audio/3gpp",
+                "webm": "audio/webm"
+            }
+            
+            content_type = content_types.get(file_format, "audio/wav")
+            filename = f"audio.{file_format}" if file_format != "unknown" else "audio.wav"
+            
+            print(f"📤 Sending to Azure OpenAI: {filename} ({content_type})")
+            
+            timeout = aiohttp.ClientTimeout(total=120)  # 2 minute timeout
+            
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                # Create multipart form data
+                data = aiohttp.FormData()
+                data.add_field(
+                    'file',
+                    audio_data,
+                    filename=filename,
+                    content_type=content_type
+                )
+                data.add_field('model', self.deployment)
+                data.add_field('response_format', 'json')  # Simple JSON format
+                
+                # Headers for Azure OpenAI
+                headers = {
+                    'api-key': self.api_key
+                }
+                
+                async with session.post(self.url, data=data, headers=headers) as response:
+                    response_text = await response.text()
+                    
+                    if response.status == 200:
+                        try:
+                            result = json.loads(response_text)
+                            transcription = result.get('text', '').strip()
+                            
+                            if transcription:
+                                print(f"✅ Transcription successful: {len(transcription)} characters")
+                                return {
+                                    "success": True,
+                                    "transcription": transcription,
+                                    "error": None
+                                }
+                            else:
+                                return {
+                                    "success": False,
+                                    "transcription": "",
+                                    "error": "Empty transcription returned"
+                                }
+                                
+                        except json.JSONDecodeError as e:
+                            return {
+                                "success": False,
+                                "transcription": "",
+                                "error": f"Invalid JSON response: {e}"
+                            }
+                    else:
+                        error_msg = f"Azure API error {response.status}: {response_text}"
+                        print(f"❌ {error_msg}")
+                        return {
+                            "success": False,
+                            "transcription": "",
+                            "error": error_msg
+                        }
+                        
+        except Exception as e:
+            error_msg = f"Transcription failed: {e}"
+            print(f"❌ {error_msg}")
+            return {
+                "success": False,
+                "transcription": "",
+                "error": error_msg
+            }
 
     async def transcribe_with_retries(self, audio_data: bytes, max_retries: int = 3) -> str:
         """
@@ -340,7 +436,7 @@ class GPT4oHTTPSTT:
 
 async def speech_to_text_from_audio(audio_data: bytes) -> str:
     """
-    Complete Azure OpenAI GPT-4o STT pipeline with error handling
+    Complete Azure OpenAI GPT-4o STT pipeline with direct format support
     
     Args:
         audio_data (bytes): Audio file data
@@ -361,65 +457,71 @@ async def speech_to_text_from_audio(audio_data: bytes) -> str:
         if not size_valid:
             return size_message
         
-        # Step 2: Analyze WAV format
-        analysis = stt_tool.analyze_wav_format(audio_data)
+        # Step 2: Detect audio format and send directly to Azure
+        # Azure OpenAI Whisper supports many formats: mp3, mp4, mpeg, mpga, m4a, wav, webm, aac, opus, 3gp
         
-        if analysis.get("error"):
-            print(f"❌ WAV format error: {analysis['error']}")
-            print("🔧 Attempting conversion anyway...")
-            
-            # Try conversion even with invalid WAV
-            success, converted_audio, message = stt_tool.convert_with_ffmpeg(audio_data)
-            
-            if success:
-                print("✅ Successfully converted invalid audio to valid WAV")
-                processed_audio = converted_audio
-                
-                # Re-analyze converted audio
-                new_analysis = stt_tool.analyze_wav_format(processed_audio)
-                if new_analysis.get("error"):
-                    return f"Audio conversion failed: {new_analysis['error']}. Please record in WAV format."
-            else:
-                return f"Audio format not supported: {message}. Please record in proper WAV format."
+        # Determine file format from audio data
+        file_extension = _detect_audio_format(audio_data)
+        print(f"🎵 Detected audio format: {file_extension}")
         
+        # Send audio directly to Azure OpenAI (no ffmpeg conversion needed)
+        print("🚀 Sending audio directly to Azure OpenAI Whisper...")
+        result = await stt_tool.transcribe_audio(audio_data, file_extension)
+        
+        if result.get("success"):
+            transcription = result["transcription"]
+            print(f"✅ STT Success: {len(transcription)} characters transcribed")
+            return transcription
         else:
-            processed_audio = audio_data
+            error_message = result.get("error", "Unknown transcription error")
+            print(f"❌ STT Error: {error_message}")
+            return f"Transcription failed: {error_message}"
             
-            # Step 3: Convert if needed for Azure compatibility
-            if analysis.get("needs_conversion", True):
-                print("🔧 Converting audio for Azure compatibility...")
-                success, converted_audio, message = stt_tool.convert_with_ffmpeg(audio_data)
-                
-                if success:
-                    processed_audio = converted_audio
-                    print("✅ Audio conversion completed")
-                    
-                    # Re-validate converted audio
-                    final_analysis = stt_tool.analyze_wav_format(processed_audio)
-                    if final_analysis.get("error"):
-                        print(f"⚠️ Post-conversion validation failed: {final_analysis['error']}")
-                        print("⚠️ Proceeding with converted audio anyway...")
-                else:
-                    print(f"⚠️ Conversion failed: {message}")
-                    print("⚠️ Proceeding with original audio...")
-            else:
-                print("✅ Audio already in optimal format for Azure")
-        
-        # Step 4: Final size check
-        if len(processed_audio) < 16000:  # Less than ~1 second at 16kHz
-            return "Processed audio too small. Please record for at least 3-4 seconds with clear speech."
-        
-        # Step 5: Send to Azure OpenAI with retries
-        print(f"🚀 Sending to Azure OpenAI: {len(processed_audio)} bytes")
-        transcription = await stt_tool.transcribe_with_retries(processed_audio)
-        
-        return transcription
-        
     except Exception as e:
-        print(f"❌ STT pipeline failed: {e}")
-        import traceback
-        print(f"📋 Full traceback:\n{traceback.format_exc()}")
-        return f"Speech recognition failed: {str(e)}. Please try recording again."
+        error_msg = str(e)
+        print(f"❌ STT Exception: {error_msg}")
+        return f"Audio processing failed: {error_msg}"
+
+def _detect_audio_format(audio_data: bytes) -> str:
+    """Detect audio format from file header"""
+    if len(audio_data) < 12:
+        return "unknown"
+    
+    header = audio_data[:32]  # Increased header size for better detection
+    
+    # Common audio format signatures
+    if header.startswith(b'RIFF') and b'WAVE' in header:
+        return "wav"
+    elif header.startswith(b'ID3') or header[1:4] == b'ID3':
+        return "mp3"
+    elif header.startswith(b'\xff\xfb') or header.startswith(b'\xff\xf3'):
+        return "mp3"
+    elif b'ftyp' in header:
+        # MP4/M4A containers
+        if b'M4A ' in header or b'mp4a' in header:
+            return "m4a"
+        elif b'mp41' in header or b'mp42' in header or b'isom' in header:
+            return "mp4"
+        else:
+            return "m4a"  # Default to m4a for ftyp containers
+    elif header.startswith(b'\xff\xf1') or header.startswith(b'\xff\xf9'):
+        # AAC ADTS format
+        return "aac"
+    elif b'ADIF' in header:
+        # AAC ADIF format
+        return "aac"
+    elif header.startswith(b'OggS'):
+        return "ogg" 
+    elif header.startswith(b'OpusHead'):
+        return "opus"
+    elif b'3gp' in header or b'3g2' in header:
+        return "3gp"
+    elif header.startswith(b'\x00\x00\x00'):
+        # Additional MP4/M4A check for files starting with size
+        if b'ftyp' in audio_data[:64]:
+            return "m4a"
+    
+    return "unknown"
 
 # Lazy initialization - only create when needed
 gpt4o_stt = None
