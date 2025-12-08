@@ -32,6 +32,7 @@ from tools.zoom_oauth_tool import get_zoom_auth_url, handle_zoom_oauth_callback,
 from tools.zoom_webhook_tool import zoom_webhook_handler
 from tools.zoom_meeting_tool import detect_zoom_meetings, parse_zoom_meeting_url, process_text_for_zoom_meetings, get_recent_zoom_meetings
 from tools.zoom_meeting_monitor import start_meeting_monitor, stop_meeting_monitor, get_monitor_status
+from tools.personal_meeting_recorder import start_personal_recording, stop_personal_recording, get_personal_recording_status
 
 # Initialize FastMCP server
 server = FastMCP("voice_agent_server")
@@ -1581,6 +1582,167 @@ async def reset_zoom_monitor_api(request: Request):
             "error": str(e)
         }, status_code=500)
 
+@app.post("/api/zoom/recording/start")
+async def start_personal_recording_api(request: Request):
+    """
+    🎤 START PERSONAL MEETING RECORDING
+    
+    Start recording audio from your microphone during Zoom meeting
+    
+    Request Body:
+    ------------
+    {
+        "meeting_url": "https://zoom.us/j/123456789"
+    }
+    
+    Response:
+    --------
+    {
+        "success": true,
+        "session_id": "personal_123456789_1640000000",
+        "meeting_id": "123456789",
+        "audio_file": "recordings/meeting_123456789_20250108_100000.wav",
+        "message": "Personal recording started"
+    }
+    """
+    try:
+        body = await request.json()
+        meeting_url = body.get('meeting_url')
+        
+        if not meeting_url:
+            return JSONResponse({
+                "success": False,
+                "error": "meeting_url is required"
+            }, status_code=400)
+        
+        # Extract meeting ID from URL
+        from tools.zoom_meeting_tool import parse_zoom_meeting_url
+        meeting_info = parse_zoom_meeting_url(meeting_url)
+        
+        if not meeting_info or not meeting_info.get('meeting_id'):
+            return JSONResponse({
+                "success": False,
+                "error": "Invalid meeting URL"
+            }, status_code=400)
+        
+        meeting_id = meeting_info['meeting_id']
+        result = start_personal_recording(meeting_id, meeting_url)
+        
+        if result.get('success'):
+            return JSONResponse(result)
+        else:
+            return JSONResponse(result, status_code=400)
+        
+    except Exception as e:
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        }, status_code=500)
+
+@app.post("/api/zoom/recording/stop")
+async def stop_personal_recording_api(request: Request):
+    """
+    🛑 STOP PERSONAL MEETING RECORDING
+    
+    Stop recording audio from your microphone
+    
+    Response:
+    --------
+    {
+        "success": true,
+        "message": "Personal recording stopped"
+    }
+    """
+    try:
+        result = stop_personal_recording()
+        return JSONResponse(result)
+        
+    except Exception as e:
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        }, status_code=500)
+
+@app.get("/api/zoom/recording/status")
+async def get_personal_recording_status_api():
+    """
+    📊 GET PERSONAL RECORDING STATUS
+    
+    Get status of personal audio recording
+    
+    Response:
+    --------
+    {
+        "is_recording": true,
+        "current_meeting_id": "123456789",
+        "recording_active": true,
+        "audio_device_ready": true
+    }
+    """
+    try:
+        status = get_personal_recording_status()
+        return JSONResponse(status)
+        
+    except Exception as e:
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        }, status_code=500)
+
+@app.get("/api/zoom/recording/results")
+async def get_personal_recording_results_api(request: Request):
+    """📋 GET PROCESSED MEETING RESULTS - Auto-processed recordings with transcripts and summaries"""
+    try:
+        import sqlite3
+        
+        meeting_id = request.query_params.get('meeting_id')
+        limit = int(request.query_params.get('limit', 10))
+        
+        conn = sqlite3.connect("database.db")
+        cur = conn.cursor()
+        
+        query = """
+            SELECT r.recording_session_id, r.meeting_id, r.start_time, r.end_time, r.duration_seconds,
+                   r.audio_file_path, s.summary_text, s.action_items, s.todo_items, t.transcript_chunk
+            FROM personal_meeting_recordings r
+            LEFT JOIN meeting_summaries s ON r.recording_session_id = s.recording_session_id
+            LEFT JOIN personal_transcripts t ON r.recording_session_id = t.recording_session_id AND t.chunk_number = -1
+            WHERE r.status = 'completed'
+        """
+        
+        params = []
+        if meeting_id:
+            query += " AND r.meeting_id = ?"
+            params.append(meeting_id)
+        
+        query += " ORDER BY r.created_at DESC LIMIT ?"
+        params.append(limit)
+        
+        cur.execute(query, params)
+        rows = cur.fetchall()
+        
+        recordings = []
+        for row in rows:
+            recordings.append({
+                "session_id": row[0],
+                "meeting_id": row[1], 
+                "start_time": row[2],
+                "end_time": row[3],
+                "duration_seconds": row[4],
+                "audio_file": row[5],
+                "summary": row[6] or "Processing...",
+                "action_items": eval(row[7]) if row[7] else [],
+                "todo_items": eval(row[8]) if row[8] else [],
+                "transcript": row[9] or "Processing..."
+            })
+        
+        conn.close()
+        
+        return JSONResponse({"success": True, "recordings": recordings})
+        
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
 @app.get("/api/zoom/meetings/results")
 async def get_meeting_results_api(request: Request):
     """
@@ -1725,7 +1887,12 @@ async def zoom_webhook_endpoint(request: Request):
     
     This endpoint receives webhook events from Zoom.
     Configure this URL in your Zoom app webhook settings:
-    https://your-server.com/webhooks/zoom
+    https://virtual-assistent-cudwb7h9e6avdkfu.eastus-01.azurewebsites.net/webhooks/zoom
+    
+    IMPORTANT: You must configure this URL in your Zoom Marketplace app:
+    1. Go to Zoom Marketplace → Your App → Features → Webhooks
+    2. Set Notification Endpoint URL to the URL above
+    3. Subscribe to events: meeting.started, meeting.ended, meeting.participant_joined, recording.transcript_completed
     
     Handles Events:
     - meeting.started
@@ -1733,16 +1900,28 @@ async def zoom_webhook_endpoint(request: Request):
     - meeting.participant_joined
     - meeting.participant_left
     - recording.transcript_completed
+    - meeting.live_transcription_* (for real-time transcripts)
     
     This is called by Zoom, not your Flutter app directly.
     """
     try:
+        # Log all incoming webhook requests for debugging
+        body = await request.body()
+        headers = dict(request.headers)
+        
+        print(f"🪝 Received Zoom webhook request:")
+        print(f"   Content-Length: {len(body)} bytes")
+        print(f"   Content-Type: {headers.get('content-type', 'None')}")
+        print(f"   User-Agent: {headers.get('user-agent', 'None')}")
+        
         # Process webhook with signature verification
         result = await zoom_webhook_handler.handle_webhook_event(request)
         
         if result.get("success"):
+            print(f"✅ Webhook processed successfully")
             return JSONResponse({"success": True})
         else:
+            print(f"❌ Webhook processing failed: {result.get('error')}")
             return JSONResponse({
                 "success": False,
                 "error": result.get("error")
@@ -1750,10 +1929,37 @@ async def zoom_webhook_endpoint(request: Request):
             
     except Exception as e:
         print(f"❌ Webhook processing error: {e}")
+        import traceback
+        print(f"Full traceback: {traceback.format_exc()}")
         return JSONResponse({
             "success": False,
             "error": str(e)
         }, status_code=500)
+
+@app.get("/webhooks/zoom/status")
+async def zoom_webhook_status():
+    """
+    📊 ZOOM WEBHOOK STATUS AND CONFIGURATION CHECK
+    
+    Use this endpoint to verify your webhook configuration
+    """
+    return JSONResponse({
+        "webhook_url": "https://virtual-assistent-cudwb7h9e6avdkfu.eastus-01.azurewebsites.net/webhooks/zoom",
+        "webhook_configured": bool(os.getenv('ZOOM_SECRET_TOKEN')),
+        "required_events": [
+            "meeting.started",
+            "meeting.ended", 
+            "meeting.participant_joined",
+            "meeting.participant_left",
+            "recording.transcript_completed"
+        ],
+        "configuration_instructions": {
+            "step_1": "Go to Zoom Marketplace → Your App → Features → Webhooks", 
+            "step_2": "Set Notification Endpoint URL to: https://virtual-assistent-cudwb7h9e6avdkfu.eastus-01.azurewebsites.net/webhooks/zoom",
+            "step_3": "Subscribe to the required events listed above",
+            "step_4": "Save and test the webhook configuration"
+        }
+    })
 
 @app.post("/webhooks/zoom/chat")
 async def zoom_chat_bot_endpoint(request: Request):

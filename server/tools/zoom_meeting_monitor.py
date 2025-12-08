@@ -50,12 +50,14 @@ class ZoomMeetingMonitor:
             print(f"🎯 Auto-triggered recording for meeting: {meeting_id}")
             
             # Handle None meeting_info safely with proper typing
-            if meeting_info is not None:
-                topic = meeting_info.get('topic', f'Meeting {meeting_id}')
-            else:
-                topic = f'Auto-detected Meeting {meeting_id}'
+            topic = f'Auto-detected Meeting {meeting_id}'
+            meeting_url = None
             
-            await self.start_background_recording(meeting_id, topic)
+            if meeting_info is not None:
+                topic = meeting_info.get('topic', topic)
+                meeting_url = meeting_info.get('url')
+            
+            await self.start_background_recording(meeting_id, topic, meeting_url)
             return {"success": True, "message": f"Recording started for meeting {meeting_id}", "meeting_id": meeting_id}
         except Exception as e:
             print(f"❌ Error triggering meeting recording: {e}")
@@ -92,33 +94,45 @@ class ZoomMeetingMonitor:
             print(f"❌ Error detecting meeting from URL: {e}")
             return {"success": False, "message": str(e)}
     
-    async def start_background_recording(self, meeting_id: str, topic: Optional[str] = None) -> None:
-        """Start background recording for detected meeting"""
+    async def start_background_recording(self, meeting_id: str, topic: Optional[str] = None, meeting_url: Optional[str] = None) -> None:
+        """Start personal audio recording from user's microphone"""
         try:
-            print(f"🎙️ Starting background recording for meeting {meeting_id}")
+            print(f"🎙️ Starting personal audio recording for meeting {meeting_id}")
             
-            # Import recording tools
+            # Import personal recording functionality
+            from .personal_meeting_recorder import start_personal_recording
             from .zoom_webhook_tool import start_meeting_recording
             
             # Ensure topic is never None
             if topic is None:
                 topic = f'Auto-detected Meeting {meeting_id}'
             
-            # Create meeting session record
-            result = await start_meeting_recording({
+            # Create meeting session record for tracking
+            session_result = await start_meeting_recording({
                 'meeting_id': meeting_id,
                 'topic': topic,
                 'start_time': datetime.now().isoformat(),
                 'detected_via': 'url_detection'
             })
             
-            if result.get('success'):
+            if session_result.get('success'):
                 self.recording_active = True
                 self.current_meeting_id = meeting_id
                 self.is_monitoring = True  # Ensure monitoring is active during recording
+                
+                # Start personal audio recording from user's microphone
+                print(f"🎤 Starting personal recording from your microphone")
+                recording_result = start_personal_recording(meeting_id, meeting_url)
+                
+                if recording_result.get('success'):
+                    print(f"✅ Personal recording started for meeting {meeting_id}")
+                    print(f"📁 Audio file: {recording_result.get('audio_file')}")
+                else:
+                    print(f"⚠️ Personal recording failed: {recording_result.get('error')}")
+                
                 print(f"✅ Background recording started for meeting {meeting_id}")
             else:
-                print(f"❌ Failed to start recording: {result.get('error')}")
+                print(f"❌ Failed to start recording: {session_result.get('error')}")
             
         except Exception as e:
             print(f"❌ Error starting background recording: {e}")
@@ -126,13 +140,21 @@ class ZoomMeetingMonitor:
             print(f"Full traceback: {traceback.format_exc()}")
     
     async def stop_background_recording(self):
-        """Stop background recording"""
+        """Stop personal audio recording"""
         try:
             if self.recording_active and self.current_meeting_id:
-                print(f"🛑 Stopping background recording for meeting {self.current_meeting_id}")
+                print(f"🛑 Stopping personal recording for meeting {self.current_meeting_id}")
                 
-                # Import recording tools
+                # Stop personal recording
+                from .personal_meeting_recorder import stop_personal_recording
                 from .zoom_webhook_tool import stop_meeting_recording
+                
+                # Stop personal audio recording
+                recording_result = stop_personal_recording()
+                if recording_result.get('success'):
+                    print(f"🎤 Personal recording stopped for meeting {self.current_meeting_id}")
+                else:
+                    print(f"⚠️ Personal recording stop failed: {recording_result.get('error')}")
                 
                 # End meeting session
                 result = await stop_meeting_recording({
