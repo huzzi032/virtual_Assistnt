@@ -81,43 +81,56 @@ class TodoTool:
         """Extract todos from text using LLM"""
         prompt = f"""
 You are an intelligent assistant that understands multiple languages including English, Hindi, Urdu, and others.
-From the following text, extract personal todos and reminders, and provide a comprehensive summary.
+From the following transcription, identify SPECIFIC PERSONS mentioned and their RELATED TASKS, COMMITMENTS, or DISCUSSIONS.
 
-IMPORTANT GUIDELINES:
-1. Extract PERSONAL tasks that the speaker themselves needs to do
-2. Look for phrases like "I need to", "remind me to", "write a note", "take notes", "do this", etc.
-3. If someone says "write a note on X" - this is a personal task for the speaker
-4. Convert tasks assigned to others into personal reminders (e.g., "Ahmed write report" → "Follow up with Ahmed on report")
-5. Look for implicit personal tasks (like taking notes, remembering information)
+CRITICAL INSTRUCTIONS:
+1. IDENTIFY ALL PERSONS: Extract names, roles, or identifiers (e.g., "Ahmed", "Huzaifa", "CEO", "manager", "client")
+2. PERSON-TASK MAPPING: For each person, list what they said, committed to, or what was discussed about them
+3. SPEAKER'S PERSONAL TASKS: Extract tasks the speaker (person recording) needs to do personally
+4. CONVERSATION CONTEXT: Capture who said what and when decisions were made
+5. RESPONSIBILITY TRACKING: Record who is responsible for each action or decision
+6. FOLLOW-UPS: Note any follow-up actions needed with specific people
 
-Examples:
-- "Write a note on Qaida Azam" → Write a note on Qaida Azam
-- "I need to buy groceries and call my mother" → Buy groceries, Call my mother
-- "Remind me to pay the electricity bill" → Pay the electricity bill  
-- "Mujhe shopping karna hai" → Go shopping
-- "Ahmed, write the report" → Follow up with Ahmed on the report
-- "Take notes about the meeting" → Take notes about the meeting
+ENHANCED EXAMPLES:
+Input: "Ahmed said he will complete the report by Friday. I need to review it and send feedback to the client."
+Output:
+- Ahmed: Complete the report by Friday
+- Speaker (Personal): Review Ahmed's report and send feedback to client
+
+Input: "In today's meeting, Huzaifa discussed the backend architecture. Sarah will handle frontend design. I promised to coordinate with both teams and prepare the project timeline."
+Output:
+- Huzaifa: Discussed backend architecture
+- Sarah: Handle frontend design  
+- Speaker (Personal): Coordinate with both teams, Prepare project timeline
+
+Input: "CEO ne kaha budget finalize karna hai. Main financial projections prepare karunga."
+Output:
+- CEO: Said to finalize budget
+- Speaker (Personal): Prepare financial projections
 
 Text to analyze: {text}
 
-For the input "Write a note on Qaida Azam" or similar note-taking requests, this should ALWAYS be treated as a personal todo for the speaker.
-
-Use your intelligence to identify personal todos in any language. Translate them to English.
-IMPORTANT: All output must be in English only, regardless of input language.
+IMPORTANT: Focus on PERSON-SPECIFIC information and WHO is responsible for WHAT. Not generic summaries.
 
 Output format:
-Summary: [Provide a detailed summary of what was discussed, including key topics, important points, decisions made, and any context. Make it comprehensive and informative - at least 2-3 sentences covering the main content and any important details mentioned.]
+Summary: [Detailed summary including WHO discussed WHAT, key decisions made by specific people, and important context with names/roles]
 
-Key Topics: [List the main topics or subjects discussed]
+Key Topics: [Main subjects discussed, mentioning which person was involved in each topic]
 
-Important Details: [Any specific details, dates, names, locations, or other important information mentioned]
+Person-Task Mapping:
+- [Person Name/Role]: [What they said, committed to, or discussed]
+- [Another Person]: [Their specific tasks or commitments]
+- Speaker (Personal): [Personal tasks for the speaker/recorder]
 
-Todos:
-- [personal todo 1 in English]
-- [personal todo 2 in English]
+Important Details: [Specific dates, times, locations, numbers, deadlines mentioned by specific people]
 
-If no personal todos found, still provide a detailed summary and say:
-Todos:
+Todos (Speaker's Personal Tasks):
+- [personal task 1 in English]
+- [personal task 2 in English]
+
+If no personal tasks identified, say:
+Todos (Speaker's Personal Tasks):
+No personal tasks identified
 No todos found
 """
         
@@ -132,58 +145,78 @@ No todos found
                 "todos": []
             }
         
-        # Parse the output
+        # Parse the output with enhanced person-task structure
         summary = ""
         key_topics = ""
+        person_task_mapping = ""
         important_details = ""
         todos = []
         
-        # Enhanced parsing for detailed summary
+        # Extract Summary
         if "Summary:" in llm_output:
             parts = llm_output.split("Summary:", 1)
             if len(parts) > 1:
-                summary_part = parts[1].split("Key Topics:", 1)[0].strip()
+                next_section = "Key Topics:" if "Key Topics:" in parts[1] else "Person-Task" if "Person-Task" in parts[1] else "Important Details:"
+                summary_part = parts[1].split(next_section, 1)[0].strip()
                 summary = summary_part
         
+        # Extract Key Topics
         if "Key Topics:" in llm_output:
             parts = llm_output.split("Key Topics:", 1)
             if len(parts) > 1:
-                topics_part = parts[1].split("Important Details:", 1)[0].strip()
+                next_section = "Person-Task" if "Person-Task" in parts[1] else "Important Details:"
+                topics_part = parts[1].split(next_section, 1)[0].strip()
                 key_topics = topics_part
         
+        # Extract Person-Task Mapping
+        if "Person-Task Mapping:" in llm_output:
+            parts = llm_output.split("Person-Task Mapping:", 1)
+            if len(parts) > 1:
+                next_section = "Important Details:" if "Important Details:" in parts[1] else "Todos"
+                person_part = parts[1].split(next_section, 1)[0].strip()
+                person_task_mapping = person_part
+        
+        # Extract Important Details
         if "Important Details:" in llm_output:
             parts = llm_output.split("Important Details:", 1)
             if len(parts) > 1:
-                details_part = parts[1].split("Todos:", 1)[0].strip()
+                details_part = parts[1].split("Todos", 1)[0].strip()
                 important_details = details_part
         
-        if "Todos:" in llm_output:
-            todos_part = llm_output.split("Todos:", 1)[1].strip()
+        # Extract Todos (Speaker's Personal Tasks)
+        if "Todos" in llm_output and "Speaker's Personal Tasks" in llm_output:
+            todos_part = llm_output.split("Todos", 1)[1].strip()
             
-            if "No todos found" not in todos_part:
+            if "No personal tasks identified" not in todos_part and "No todos found" not in todos_part:
                 for line in todos_part.split("\n"):
                     if line.strip().startswith("-"):
                         todo = line.strip("- ").strip()
-                        if todo:
+                        if todo and "Speaker's Personal Tasks" not in todo and "Personal Tasks" not in todo:
                             todos.append(todo)
                             await self.add_todo(todo)
         
-        # Create comprehensive summary
+        # Create comprehensive summary with person-task context
         if not summary:
             summary = f"Analysis of voice input: {text[:100]}..."
         
-        # Combine all information for detailed summary
+        # Build detailed summary with person-task information
         detailed_summary = summary
-        if key_topics:
-            detailed_summary += f"\n\nKey Topics Discussed: {key_topics}"
-        if important_details:
-            detailed_summary += f"\n\nImportant Details: {important_details}"
         
-        print(f"✅ Extracted {len(todos)} todos with detailed summary")
+        if person_task_mapping:
+            detailed_summary += f"\n\n👥 Person-Task Mapping:\n{person_task_mapping}"
+        
+        if key_topics:
+            detailed_summary += f"\n\n📋 Key Topics: {key_topics}"
+        
+        if important_details:
+            detailed_summary += f"\n\n📌 Important Details: {important_details}"
+        
+        print(f"✅ Extracted {len(todos)} personal todos with person-specific context")
         return {
             "summary": detailed_summary,
             "todos": todos,
             "key_topics": key_topics,
+            "person_task_mapping": person_task_mapping,
             "important_details": important_details
         }
 
