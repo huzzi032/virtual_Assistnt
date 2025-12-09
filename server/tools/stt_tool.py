@@ -251,6 +251,8 @@ class GPT4oHTTPSTT:
                 )
                 data.add_field('model', self.deployment)
                 data.add_field('response_format', 'json')  # Simple JSON format
+                # Add chunking strategy for diarization model compatibility
+                data.add_field('chunking_strategy', 'auto')
                 
                 # Headers for Azure OpenAI
                 headers = {
