@@ -1466,15 +1466,46 @@ async def upload_audio_file(file: UploadFile = File(...), user_email: str = Form
     try:
         import os
         
-        # Validate file type
+        # Validate file type with improved detection
         allowed_extensions = ['.mp3', '.wav', '.m4a', '.mp4', '.webm', '.ogg', '.opus', '.aac', '.3gp']
         filename = file.filename or 'unknown'
         file_ext = os.path.splitext(filename)[1].lower()
         
+        # Handle case where file has no extension or filename is empty/None
+        if not file_ext or file_ext == '':
+            # Try to detect from content-type
+            content_type = getattr(file, 'content_type', '') or ''
+            print(f"📄 No file extension found, checking content-type: {content_type}")
+            
+            # Map common content types to extensions
+            content_type_map = {
+                'audio/mpeg': '.mp3',
+                'audio/mp3': '.mp3', 
+                'audio/wav': '.wav',
+                'audio/x-wav': '.wav',
+                'audio/mp4': '.m4a',
+                'audio/m4a': '.m4a',
+                'audio/aac': '.aac',
+                'audio/ogg': '.ogg',
+                'audio/webm': '.webm',
+                'audio/3gpp': '.3gp',
+                'audio/opus': '.opus'
+            }
+            
+            file_ext = content_type_map.get(content_type.lower(), '')
+            
+            if not file_ext:
+                # Last resort: assume it's a common audio format
+                print(f"⚠️ Could not determine file type from filename '{filename}' or content-type '{content_type}'")
+                file_ext = '.mp3'  # Default to MP3 as fallback
+                print(f"🔄 Using fallback extension: {file_ext}")
+        
+        print(f"📁 Processing file: {filename} -> Extension: {file_ext}")
+        
         if file_ext not in allowed_extensions:
             return JSONResponse({
                 "success": False,
-                "error": f"File type {file_ext} not supported. Allowed: {', '.join(allowed_extensions)}"
+                "error": f"File type '{file_ext}' not supported. Allowed: {', '.join(allowed_extensions)}"
             }, status_code=400)
         
         # Create uploads directory
