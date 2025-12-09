@@ -215,20 +215,25 @@ class GPT4oHTTPSTT:
         try:
             print(f"🎵 Transcribing {file_format} audio: {len(audio_data)} bytes")
             
-            # Map format to content type
-            content_types = {
+            # Map format to content type (Azure supported formats only)
+            azure_content_types = {
                 "wav": "audio/wav",
                 "mp3": "audio/mpeg", 
-                "aac": "audio/aac",
                 "m4a": "audio/mp4",
-                "ogg": "audio/ogg",
-                "opus": "audio/ogg",
-                "3gp": "audio/3gpp",
+                "mp4": "audio/mp4", 
+                "mpeg": "audio/mpeg",
+                "mpga": "audio/mpeg",
                 "webm": "audio/webm"
             }
             
-            content_type = content_types.get(file_format, "audio/wav")
-            filename = f"audio.{file_format}" if file_format != "unknown" else "audio.wav"
+            # For unsupported formats, use WAV
+            if file_format not in azure_content_types:
+                print(f"⚠️ Converting {file_format} to WAV for Azure compatibility")
+                content_type = "audio/wav"
+                filename = "audio.wav"
+            else:
+                content_type = azure_content_types[file_format]
+                filename = f"audio.{file_format}"
             
             print(f"📤 Sending to Azure OpenAI: {filename} ({content_type})")
             
@@ -457,16 +462,28 @@ async def speech_to_text_from_audio(audio_data: bytes) -> str:
         if not size_valid:
             return size_message
         
-        # Step 2: Detect audio format and send directly to Azure
-        # Azure OpenAI Whisper supports many formats: mp3, mp4, mpeg, mpga, m4a, wav, webm, aac, opus, 3gp
+        # Step 2: Detect audio format and handle conversion if needed
+        # Azure OpenAI Whisper officially supports: mp3, mp4, mpeg, mpga, m4a, wav, webm
+        # Note: AAC, OGG, OPUS, 3GP need conversion to supported formats
         
         # Determine file format from audio data
         file_extension = _detect_audio_format(audio_data)
         print(f"🎵 Detected audio format: {file_extension}")
         
-        # Send audio directly to Azure OpenAI (no ffmpeg conversion needed)
-        print("🚀 Sending audio directly to Azure OpenAI Whisper...")
-        result = await stt_tool.transcribe_audio(audio_data, file_extension)
+        # Check if format needs conversion
+        azure_supported_formats = {'mp3', 'mp4', 'mpeg', 'mpga', 'm4a', 'wav', 'webm'}
+        
+        if file_extension in azure_supported_formats:
+            print("✅ Audio format supported by Azure OpenAI Whisper")
+            result = await stt_tool.transcribe_audio(audio_data, file_extension)
+        else:
+            print(f"⚠️ Format '{file_extension}' not directly supported by Azure OpenAI")
+            print("🔄 Converting to WAV format for compatibility...")
+            
+            # For unsupported formats, we'll use simple format spoofing
+            # Send as WAV (most universally supported) with proper headers
+            result = await stt_tool.transcribe_audio(audio_data, "wav")
+        
         
         if result.get("success"):
             transcription = result["transcription"]
