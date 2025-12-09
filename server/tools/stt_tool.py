@@ -18,7 +18,7 @@ class GPT4oHTTPSTT:
         self.endpoint = os.getenv('GPT4O_TRANSCRIBE_ENDPOINT', 'https://iarshad-3836-resource.cognitiveservices.azure.com')
         self.deployment = os.getenv('GPT4O_DEPLOYMENT_NAME', 'gpt-4o-transcribe-diarize')
         # Note: Using diarize model but with simple JSON format for transcription only
-        self.api_version = os.getenv('GPT4O_API_VERSION', '2025-03-01-preview')
+        self.api_version = os.getenv('GPT4O_API_VERSION', '2024-06-01')
         self.api_key = os.getenv('GPT4O_API_KEY', '')
         
         # Validate API key
@@ -48,10 +48,10 @@ class GPT4oHTTPSTT:
             if len(audio_data) < MIN_SIZE:
                 return False, f"Audio too small: {len(audio_data)} bytes (need ≥{MIN_SIZE} for 2+ seconds). Record for at least 3-4 seconds."
             
-            # Maximum size check (25MB Azure limit)
-            MAX_SIZE = 25 * 1024 * 1024  # 25MB
+            # Maximum size check for single chunk (10MB safe limit for stability)
+            MAX_SIZE = 10 * 1024 * 1024  # 10MB safe limit
             if len(audio_data) > MAX_SIZE:
-                return False, f"Audio too large: {len(audio_data)} bytes (max {MAX_SIZE})"
+                return False, f"Audio too large for single processing: {len(audio_data)} bytes (max {MAX_SIZE}). Use chunking for larger files."
             
             return True, f"Audio size OK: {len(audio_data)} bytes"
             
@@ -238,7 +238,7 @@ class GPT4oHTTPSTT:
             
             print(f"📤 Sending to Azure OpenAI: {filename} ({content_type})")
             
-            timeout = aiohttp.ClientTimeout(total=120)  # 2 minute timeout
+            timeout = aiohttp.ClientTimeout(total=300)  # 5 minute timeout for longer files
             
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 # Create multipart form data
@@ -251,8 +251,7 @@ class GPT4oHTTPSTT:
                 )
                 data.add_field('model', self.deployment)
                 data.add_field('response_format', 'json')  # Simple JSON format
-                # Add chunking strategy for diarization model compatibility
-                data.add_field('chunking_strategy', 'auto')
+                # Remove chunking_strategy to prevent Azure 500 errors
                 
                 # Headers for Azure OpenAI
                 headers = {
@@ -319,7 +318,7 @@ class GPT4oHTTPSTT:
                 print(f"🔑 API Key (first 10 chars): {self.api_key[:10]}...")
                 print(f"📦 Deployment: {self.deployment}")
                 
-                timeout = aiohttp.ClientTimeout(total=120)  # 2 minute timeout
+                timeout = aiohttp.ClientTimeout(total=300)  # 5 minute timeout for longer files
                 
                 async with aiohttp.ClientSession(timeout=timeout) as session:
                     # Create multipart form data using OpenAI-recommended safe workflow
@@ -332,8 +331,7 @@ class GPT4oHTTPSTT:
                     )
                     data.add_field('model', self.deployment)
                     data.add_field('response_format', 'json')  # Use simple JSON format only
-                    # Add chunking strategy for diarization model (even though we're using simple format)
-                    data.add_field('chunking_strategy', 'auto')
+                    # Remove chunking_strategy to avoid Azure 500 server errors
                     
                     # Correct headers for Azure OpenAI - using api-key header
                     # Note: Don't set Content-Type manually for multipart - aiohttp handles it
@@ -410,7 +408,7 @@ class GPT4oHTTPSTT:
 
 async def speech_to_text_from_audio(audio_data: bytes) -> str:
     """
-    Complete Azure OpenAI GPT-4o STT pipeline with direct format support
+    Complete Azure OpenAI GPT-4o STT pipeline with chunking for large files
     
     Args:
         audio_data (bytes): Audio file data
@@ -424,6 +422,16 @@ async def speech_to_text_from_audio(audio_data: bytes) -> str:
         # Initialize STT tool using lazy initialization
         stt_tool = get_gpt4o_stt()
         
+        # Define chunking thresholds
+        CHUNK_SIZE_LIMIT = 8 * 1024 * 1024  # 8MB chunks for stability
+        LARGE_FILE_THRESHOLD = 10 * 1024 * 1024  # 10MB threshold
+        
+        # Check if file needs chunking
+        if len(audio_data) > LARGE_FILE_THRESHOLD:
+            print(f"🔄 Large file detected ({len(audio_data)/1024/1024:.2f}MB). Processing in chunks...")
+            return await _process_audio_in_chunks(audio_data, stt_tool, CHUNK_SIZE_LIMIT)
+        
+        # For smaller files, process normally
         # Step 1: Validate audio size
         size_valid, size_message = stt_tool.validate_audio_requirements(audio_data)
         print(f"📏 {size_message}")
@@ -467,6 +475,204 @@ async def speech_to_text_from_audio(audio_data: bytes) -> str:
         error_msg = str(e)
         print(f"❌ STT Exception: {error_msg}")
         return f"Audio processing failed: {error_msg}"
+
+async def _process_audio_in_chunks(audio_data: bytes, stt_tool, chunk_size: int) -> str:
+    """
+    Process large audio files by splitting into time-based chunks using ffmpeg
+    
+    Args:
+        audio_data: The large audio file bytes
+        stt_tool: The STT tool instance
+        chunk_size: Maximum bytes per chunk
+        
+    Returns:
+        Combined transcription from all chunks
+    """
+    try:
+        print(f"🔪 Chunking large audio file ({len(audio_data)/1024/1024:.2f}MB) into {chunk_size/1024/1024:.0f}MB segments")
+        
+        # Check if ffmpeg is available for chunking
+        if not shutil.which('ffmpeg'):
+            print("⚠️ ffmpeg not available for chunking. Attempting direct processing...")
+            # Fallback to direct processing with increased timeout
+            result = await stt_tool.transcribe_audio(audio_data, _detect_audio_format(audio_data))
+            if result.get("success"):
+                return result["transcription"]
+            else:
+                return f"Large file processing failed: {result.get('error', 'Unknown error')}"
+        
+        # Save original file to temp location
+        with tempfile.NamedTemporaryFile(suffix='.input', delete=False) as temp_input:
+            temp_input.write(audio_data)
+            input_path = temp_input.name
+        
+        try:
+            # Get audio duration using ffprobe
+            probe_cmd = [
+                'ffprobe', '-v', 'quiet', '-print_format', 'json', 
+                '-show_streams', input_path
+            ]
+            
+            probe_result = subprocess.run(probe_cmd, capture_output=True, text=True, timeout=30)
+            
+            if probe_result.returncode != 0:
+                print("⚠️ Could not determine audio duration. Using size-based fallback...")
+                return await _fallback_size_chunking(audio_data, stt_tool, chunk_size)
+            
+            import json
+            probe_data = json.loads(probe_result.stdout)
+            
+            duration = None
+            for stream in probe_data.get('streams', []):
+                if stream.get('codec_type') == 'audio':
+                    duration = float(stream.get('duration', 0))
+                    break
+            
+            if not duration or duration < 10:  # Less than 10 seconds
+                print("⚠️ Audio too short or duration unknown. Processing directly...")
+                result = await stt_tool.transcribe_audio(audio_data, _detect_audio_format(audio_data))
+                return result.get("transcription", "No transcription available") if result.get("success") else f"Processing failed: {result.get('error', 'Unknown error')}"
+            
+            print(f"📊 Audio duration: {duration:.1f} seconds")
+            
+            # Calculate chunk duration (aim for ~5MB chunks)
+            # Estimate bitrate and calculate time chunks
+            estimated_bitrate = (len(audio_data) * 8) / duration  # bits per second
+            target_chunk_duration = (chunk_size * 8) / estimated_bitrate if estimated_bitrate > 0 else 300  # Default 5 min chunks
+            
+            # Ensure chunks are at least 30 seconds but not more than 10 minutes
+            chunk_duration = max(30, min(600, target_chunk_duration))
+            num_chunks = int((duration / chunk_duration) + 1)
+            
+            print(f"🔢 Processing {num_chunks} chunks of ~{chunk_duration:.0f} seconds each")
+            
+            # Process each chunk
+            transcriptions = []
+            
+            for i in range(num_chunks):
+                start_time = i * chunk_duration
+                
+                # Ensure we don't go beyond the actual duration
+                if start_time >= duration:
+                    break
+                
+                # Set chunk duration, but don't exceed file end
+                current_duration = min(chunk_duration, duration - start_time)
+                
+                print(f"🎬 Processing chunk {i+1}/{num_chunks}: {start_time:.1f}s - {start_time + current_duration:.1f}s")
+                
+                # Extract chunk using ffmpeg
+                chunk_path = f"{input_path}_chunk_{i}.wav"
+                
+                chunk_cmd = [
+                    'ffmpeg', '-y', '-hide_banner', '-loglevel', 'error',
+                    '-i', input_path,
+                    '-ss', str(start_time),
+                    '-t', str(current_duration),
+                    '-ac', '1',              # Mono
+                    '-ar', '16000',          # 16kHz
+                    '-c:a', 'pcm_s16le',     # PCM format
+                    chunk_path
+                ]
+                
+                chunk_result = subprocess.run(chunk_cmd, capture_output=True, text=True, timeout=60)
+                
+                if chunk_result.returncode != 0:
+                    print(f"⚠️ Failed to create chunk {i+1}: {chunk_result.stderr}")
+                    continue
+                
+                try:
+                    # Read chunk data
+                    with open(chunk_path, 'rb') as chunk_file:
+                        chunk_data = chunk_file.read()
+                    
+                    if len(chunk_data) < 1000:  # Skip very small chunks
+                        print(f"⏭️ Skipping tiny chunk {i+1}")
+                        continue
+                    
+                    # Transcribe chunk with retries
+                    chunk_result = await stt_tool.transcribe_with_retries(chunk_data, max_retries=2)
+                    
+                    if chunk_result and "failed" not in chunk_result.lower():
+                        transcriptions.append(f"[{start_time:.0f}s-{start_time + current_duration:.0f}s] {chunk_result.strip()}")
+                        print(f"✅ Chunk {i+1} transcribed: {len(chunk_result)} characters")
+                    else:
+                        print(f"⚠️ Chunk {i+1} failed: {chunk_result}")
+                
+                except Exception as chunk_error:
+                    print(f"⚠️ Error processing chunk {i+1}: {chunk_error}")
+                
+                finally:
+                    # Cleanup chunk file
+                    try:
+                        if os.path.exists(chunk_path):
+                            os.unlink(chunk_path)
+                    except:
+                        pass
+                
+                # Brief pause between chunks to avoid rate limiting
+                await asyncio.sleep(1)
+            
+            if transcriptions:
+                combined_transcription = "\n\n".join(transcriptions)
+                print(f"🎉 Chunked processing complete: {len(combined_transcription)} total characters")
+                return combined_transcription
+            else:
+                return "No successful transcriptions from chunks. The audio may be too noisy or contain no speech."
+        
+        finally:
+            # Cleanup input file
+            try:
+                if os.path.exists(input_path):
+                    os.unlink(input_path)
+            except:
+                pass
+    
+    except Exception as e:
+        print(f"❌ Chunking error: {e}")
+        # Fallback to direct processing
+        print("🔄 Falling back to direct processing...")
+        result = await stt_tool.transcribe_audio(audio_data, _detect_audio_format(audio_data))
+        return result.get("transcription", f"Chunking and direct processing both failed: {e}") if result.get("success") else f"Processing failed: {result.get('error', str(e))}"
+
+async def _fallback_size_chunking(audio_data: bytes, stt_tool, chunk_size: int) -> str:
+    """
+    Simple size-based chunking as fallback when ffmpeg duration analysis fails
+    """
+    print("📏 Using size-based chunking fallback")
+    
+    total_chunks = (len(audio_data) + chunk_size - 1) // chunk_size
+    transcriptions = []
+    
+    for i in range(total_chunks):
+        start_pos = i * chunk_size
+        end_pos = min(start_pos + chunk_size, len(audio_data))
+        chunk_data = audio_data[start_pos:end_pos]
+        
+        if len(chunk_data) < 1000:  # Skip very small chunks
+            continue
+        
+        print(f"📦 Processing size chunk {i+1}/{total_chunks}: {len(chunk_data)} bytes")
+        
+        try:
+            result = await stt_tool.transcribe_with_retries(chunk_data, max_retries=2)
+            
+            if result and "failed" not in result.lower():
+                transcriptions.append(f"[Part {i+1}] {result.strip()}")
+                print(f"✅ Size chunk {i+1} completed")
+            else:
+                print(f"⚠️ Size chunk {i+1} failed")
+        
+        except Exception as chunk_error:
+            print(f"⚠️ Error in size chunk {i+1}: {chunk_error}")
+        
+        # Brief pause between chunks
+        await asyncio.sleep(1)
+    
+    if transcriptions:
+        return "\n\n".join(transcriptions)
+    else:
+        return "Size-based chunking failed to produce transcriptions."
 
 def _detect_audio_format(audio_data: bytes) -> str:
     """Detect audio format from file header"""
