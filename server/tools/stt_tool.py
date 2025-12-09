@@ -304,13 +304,9 @@ class GPT4oHTTPSTT:
 
     async def transcribe_with_retries(self, audio_data: bytes, max_retries: int = 3) -> str:
         """
-        Transcribe with exponential backoff retry for Azure 500 errors
+        Transcribe with exponential backoff retry for Azure errors
         
-        Implements OpenAI-recommended safe workflow for gpt-4o-transcribe-diarize:
-        1. Try diarized_json format first
-        2. Check for segments array in response
-        3. Fallback to plain text if diarization fails (known issue)
-        4. If all fails, retry with simple 'json' format
+        Uses simple JSON format for fast and reliable transcription without diarization
         """
         
         for attempt in range(max_retries):
@@ -332,10 +328,7 @@ class GPT4oHTTPSTT:
                         content_type='audio/wav'
                     )
                     data.add_field('model', self.deployment)
-                    data.add_field('response_format', 'diarized_json')  # Try diarization first
-                    # For longer audio, add chunking strategy
-                    if len(audio_data) > 1024 * 1024:  # > 1MB (~30+ seconds)
-                        data.add_field('chunking_strategy', 'auto')
+                    data.add_field('response_format', 'json')  # Use simple JSON format only
                     
                     # Correct headers for Azure OpenAI - using api-key header
                     # Note: Don't set Content-Type manually for multipart - aiohttp handles it
@@ -351,38 +344,14 @@ class GPT4oHTTPSTT:
                             result = await response.json()
                             print(f"🎯 Azure response: {result}")
                             
-                            # Implement OpenAI-recommended safe workflow for diarization
+                            # Simple transcription only - no diarization
                             transcription = ""
-                            diarization_success = False
                             
-                            # Check if we got speaker segments (diarization working)
-                            if 'segments' in result and result['segments']:
-                                print("🎙️ Speaker diarization successful!")
-                                diarization_success = True
-                                
-                                # Combine segments with speaker labels
-                                segment_texts = []
-                                for i, seg in enumerate(result['segments']):
-                                    speaker = seg.get('speaker', f'Speaker {i+1}')
-                                    text = seg.get('text', '').strip()
-                                    start = seg.get('start', 0)
-                                    end = seg.get('end', 0)
-                                    
-                                    if text:
-                                        print(f"   {speaker} ({start:.1f}s-{end:.1f}s): {text}")
-                                        segment_texts.append(f"[{speaker}] {text}")
-                                
-                                transcription = " ".join(segment_texts) if segment_texts else ""
-                            
-                            # Fallback to plain text if diarization failed (known issue)
-                            if not transcription and 'text' in result:
-                                print("⚠️ Diarization failed silently (known issue), using plain text")
+                            if 'text' in result:
                                 transcription = result['text'].strip()
-                                diarization_success = False
                             
                             if transcription:
-                                success_msg = "with speaker diarization" if diarization_success else "as plain text"
-                                print(f"✅ Transcription successful {success_msg}: '{transcription[:100]}{'...' if len(transcription) > 100 else ''}'")
+                                print(f"✅ Transcription successful: '{transcription[:100]}{'...' if len(transcription) > 100 else ''}'")
                                 return transcription
                             else:
                                 print(f"⚠️ No transcription found in response: {result}")
@@ -391,11 +360,6 @@ class GPT4oHTTPSTT:
                         elif response.status == 400:
                             error_text = await response.text()
                             print(f"❌ Bad request (400): {error_text}")
-                            
-                            # If diarized_json format is not supported, try simple json
-                            if "diarized_json" in error_text and attempt == 0:
-                                print("🔄 Diarized format not supported, trying simple json...")
-                                continue  # This will retry with same params, but we could modify to use 'json'
                             
                             if "format" in error_text.lower():
                                 return "Audio format error. Please ensure proper WAV format (PCM16, mono, 16kHz)."
