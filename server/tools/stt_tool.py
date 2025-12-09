@@ -17,6 +17,7 @@ class GPT4oHTTPSTT:
         # Azure OpenAI configuration - Use GPT4O environment variables
         self.endpoint = os.getenv('GPT4O_TRANSCRIBE_ENDPOINT', 'https://iarshad-3836-resource.cognitiveservices.azure.com')
         self.deployment = os.getenv('GPT4O_DEPLOYMENT_NAME', 'gpt-4o-transcribe-diarize')
+        # Note: Using diarize model but with simple JSON format for transcription only
         self.api_version = os.getenv('GPT4O_API_VERSION', '2025-03-01-preview')
         self.api_key = os.getenv('GPT4O_API_KEY', '')
         
@@ -329,6 +330,8 @@ class GPT4oHTTPSTT:
                     )
                     data.add_field('model', self.deployment)
                     data.add_field('response_format', 'json')  # Use simple JSON format only
+                    # Add chunking strategy for diarization model (even though we're using simple format)
+                    data.add_field('chunking_strategy', 'auto')
                     
                     # Correct headers for Azure OpenAI - using api-key header
                     # Note: Don't set Content-Type manually for multipart - aiohttp handles it
