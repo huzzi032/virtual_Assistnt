@@ -251,7 +251,7 @@ class GPT4oHTTPSTT:
                 )
                 data.add_field('model', self.deployment)
                 data.add_field('response_format', 'json')  # Simple JSON format
-                # Remove chunking_strategy to prevent Azure 500 errors
+                data.add_field('chunking_strategy', 'auto')  # Required for diarization model
                 
                 # Headers for Azure OpenAI
                 headers = {
@@ -331,7 +331,7 @@ class GPT4oHTTPSTT:
                     )
                     data.add_field('model', self.deployment)
                     data.add_field('response_format', 'json')  # Use simple JSON format only
-                    # Remove chunking_strategy to avoid Azure 500 server errors
+                    data.add_field('chunking_strategy', 'auto')  # Required for diarization model
                     
                     # Correct headers for Azure OpenAI - using api-key header
                     # Note: Don't set Content-Type manually for multipart - aiohttp handles it
