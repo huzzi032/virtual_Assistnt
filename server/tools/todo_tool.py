@@ -80,33 +80,41 @@ class TodoTool:
     async def extract_todos_from_text(self, text: str) -> dict:
         """Extract todos from text using LLM with beautiful formatting"""
         prompt = f"""
-Create a beautiful, organized summary from this transcription with person-specific assignments.
+You are analyzing a business meeting transcription. Create a comprehensive, well-organized summary.
 
-Instructions:
-1. Identify all persons mentioned (names, roles)
-2. Group tasks and commitments by person
-3. Extract personal tasks for the speaker
-4. Use clean format with emojis
+IMPORTANT CONTEXT:
+- If you detect Hindi/Urdu words, treat them as Pakistani business context (not Indian)
+- ALL names must be written in ENGLISH only (never use Devanagari/Arabic script)
+- Provide detailed, comprehensive summary with full context
+- Make output highly readable and professional
 
 Text: {text}
 
-Format:
-🎯 **MEETING SUMMARY**
-[Brief summary of main discussion and decisions]
+Required Format:
 
-👥 **RESPONSIBILITIES BY PERSON**
+🎯 **COMPREHENSIVE MEETING SUMMARY**
+[Write a detailed 3-4 sentence summary explaining: what was the main purpose of the meeting, what key topics were discussed, what major decisions were made, and what the overall outcome/next steps are. Make this comprehensive and informative.]
 
-**👤 [Person Name]:**
-• [Their specific tasks]
+👥 **RESPONSIBILITIES & COMMITMENTS**
 
-**👤 Speaker (You):**
-• [Your personal tasks]
+**🔸 [English Name Only]:**
+• [Detailed task/commitment with context]
+• [Another specific responsibility]
 
-📋 **KEY DECISIONS**
-• [Important decisions]
+**🔸 Speaker (Personal Tasks):**
+• [Your specific action items]
 
-📌 **IMPORTANT DETAILS**
-• [Dates, deadlines, URLs, etc.]
+📊 **KEY DECISIONS & OUTCOMES**
+• [Important decision 1 with context]
+• [Important decision 2 with reasoning]
+• [Any major agreements reached]
+
+📅 **IMPORTANT DETAILS**
+• [Specific dates, deadlines, timelines]
+• [Technical details, URLs, specifications]
+• [Contact information, meeting schedules]
+
+Ensure ALL content is in English and professionally formatted.
 """
         
         try:
@@ -119,48 +127,47 @@ Format:
                 "todos": []
             }
         
-        # Parse beautiful output
+        # Parse comprehensive beautiful output
         summary = ""
         todos = []
         
-        # Extract meeting summary
-        if "🎯 **MEETING SUMMARY**" in llm_output:
-            parts = llm_output.split("🎯 **MEETING SUMMARY**", 1)[1]
+        # Extract comprehensive meeting summary
+        if "🎯 **COMPREHENSIVE MEETING SUMMARY**" in llm_output:
+            parts = llm_output.split("🎯 **COMPREHENSIVE MEETING SUMMARY**", 1)[1]
             summary_part = parts.split("👥 **", 1)[0].strip()
-            summary = f"🎯 **MEETING SUMMARY**\n{summary_part}"
+            summary = f"🎯 **COMPREHENSIVE MEETING SUMMARY**\n{summary_part}"
         
-        # Add responsibilities section if exists
-        if "👥 **RESPONSIBILITIES BY PERSON**" in llm_output or "👥 **PERSON-SPECIFIC RESPONSIBILITIES**" in llm_output:
-            marker = "👥 **RESPONSIBILITIES BY PERSON**" if "👥 **RESPONSIBILITIES BY PERSON**" in llm_output else "👥 **PERSON-SPECIFIC RESPONSIBILITIES**"
-            parts = llm_output.split(marker, 1)[1]
-            resp_part = parts.split("📋 **", 1)[0].strip()
-            summary += f"\n\n👥 **RESPONSIBILITIES BY PERSON**\n{resp_part}"
+        # Add responsibilities section
+        if "👥 **RESPONSIBILITIES & COMMITMENTS**" in llm_output:
+            parts = llm_output.split("👥 **RESPONSIBILITIES & COMMITMENTS**", 1)[1]
+            resp_part = parts.split("📊 **", 1)[0].strip()
+            summary += f"\n\n👥 **RESPONSIBILITIES & COMMITMENTS**\n{resp_part}"
         
-        # Add decisions if exists
-        if "📋 **KEY DECISIONS" in llm_output:
-            parts = llm_output.split("📋 **KEY DECISIONS", 1)[1]
-            decisions_part = parts.split("📌 **", 1)[0].strip()
-            summary += f"\n\n📋 **KEY DECISIONS**{decisions_part}"
+        # Add key decisions
+        if "📊 **KEY DECISIONS & OUTCOMES**" in llm_output:
+            parts = llm_output.split("📊 **KEY DECISIONS & OUTCOMES**", 1)[1]
+            decisions_part = parts.split("📅 **", 1)[0].strip()
+            summary += f"\n\n📊 **KEY DECISIONS & OUTCOMES**\n{decisions_part}"
         
-        # Add important details if exists
-        if "📌 **IMPORTANT DETAILS**" in llm_output:
-            parts = llm_output.split("📌 **IMPORTANT DETAILS**", 1)[1].strip()
-            summary += f"\n\n📌 **IMPORTANT DETAILS**\n{parts}"
+        # Add important details
+        if "📅 **IMPORTANT DETAILS**" in llm_output:
+            parts = llm_output.split("📅 **IMPORTANT DETAILS**", 1)[1].strip()
+            summary += f"\n\n📅 **IMPORTANT DETAILS**\n{parts}"
         
         # Extract personal todos from Speaker section
-        if "**👤 Speaker" in llm_output:
-            speaker_text = llm_output.split("**👤 Speaker", 1)[1]
+        if "**🔸 Speaker" in llm_output:
+            speaker_text = llm_output.split("**🔸 Speaker", 1)[1]
             for line in speaker_text.split("\n"):
                 if line.strip().startswith("•"):
                     todo = line.strip("• ").strip()
-                    if todo and len(todo) > 3:
+                    if todo and len(todo) > 5:
                         todos.append(todo)
                         await self.add_todo(todo)
         
         if not summary:
-            summary = f"Meeting analysis: {text[:100]}..."
+            summary = f"📋 Comprehensive meeting analysis: {text[:150]}..."
         
-        print(f"✅ Generated beautiful summary with {len(todos)} personal todos")
+        print(f"✅ Generated comprehensive summary with {len(todos)} personal todos")
         return {
             "summary": summary,
             "todos": todos

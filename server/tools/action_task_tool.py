@@ -52,26 +52,28 @@ async def call_llm(text: str, prompt: str, max_retries: int = 3) -> str:
 async def extract_action_tasks(text: str) -> dict:
     """Extract actionable tasks organized by person from transcription"""
     prompt = f"""
-Extract actionable tasks organized by person from this meeting transcription.
+Extract actionable tasks from this business meeting. 
 
-Guidelines:
-1. Only tasks with clear person assignments
-2. Include deadlines if mentioned
-3. Organize by person
-4. Use clean format
+IMPORTANT:
+- Write ALL names in ENGLISH only (never use Hindi/Urdu script)
+- If detecting Urdu/Hindi, treat as Pakistani business context
+- Focus on clear, specific action items with deadlines
+- Professional, readable format
 
 Text: {text}
 
 Format:
-📝 **ACTION ITEMS BY PERSON**
 
-**🔹 [Person Name]:**
-• [Their specific tasks]
+📋 **ACTION ITEMS**
 
-**🔹 Speaker (You):**
+**🔹 [English Name]:**
+• [Specific task with deadline if mentioned]
+• [Another clear action item]
+
+**🔹 Speaker:**
 • [Your action items]
 
-If no clear action items: "No specific action items identified."
+Only include clear, actionable tasks. If none found: "No specific action items identified."
 """
     
     try:
