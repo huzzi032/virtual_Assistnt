@@ -50,65 +50,56 @@ async def call_llm(text: str, prompt: str, max_retries: int = 3) -> str:
     raise Exception("Max retries exceeded for LLM call")
 
 async def extract_action_tasks(text: str) -> dict:
-    """Extract actionable tasks with assignments from text"""
+    """Extract actionable tasks organized by person from transcription"""
     prompt = f"""
-You are an intelligent assistant that understands multiple languages including English, Hindi, Urdu, and others.
-From the following text, extract actionable tasks that are assigned to specific people.
-Each task must clearly state: what to do, who will do it, and any mentioned due date.
+Extract actionable tasks organized by person from this meeting transcription.
 
-Examples:
-- "Ahmed, please write the report by Friday" → task: Write the report, assigned_to: Ahmed, due_date: Friday
-- "Mohammad, your task is to code encryption by Nov 20th" → task: Code encryption, assigned_to: Mohammad, due_date: Nov 20th
-- "Aapka task hai Python program likhna" → task: Write Python program, assigned_to: User, due_date: Not specified
-- "I need to buy groceries" → Not an action task (personal todo)
+Guidelines:
+1. Only tasks with clear person assignments
+2. Include deadlines if mentioned
+3. Organize by person
+4. Use clean format
 
 Text: {text}
 
-Use your intelligence to identify tasks in any language. Translate and extract the task information.
-IMPORTANT: All output must be in English only, regardless of input language.
+Format:
+📝 **ACTION ITEMS BY PERSON**
 
-Output format:
-Action Tasks:
-- task: [task description in English], assigned_to: [person name], due_date: [date or Not specified]
+**🔹 [Person Name]:**
+• [Their specific tasks]
 
-If no action tasks found, just say:
-Action Tasks:
-No actionable tasks found
+**🔹 Speaker (You):**
+• [Your action items]
+
+If no clear action items: "No specific action items identified."
 """
     
     try:
         llm_output = await call_llm(text, prompt)
-        print(f"✅ LLM Output: {llm_output}")
+        print(f"✅ Action Tasks Output: {llm_output}")
     except Exception as e:
         print(f"❌ LLM Error: {e}")
-        # Very minimal fallback - just return empty if LLM completely fails
         return {"action_tasks": []}
     
-    # Parse the output
+    # Parse organized action tasks
     action_tasks = []
-    if "Action Tasks:" in llm_output:
-        tasks_part = llm_output.split("Action Tasks:", 1)[1].strip()
-        
-        if "No actionable tasks found" not in tasks_part:
-            for line in tasks_part.split("\n"):
-                if line.strip().startswith("-"):
-                    line = line.strip("- ").strip()
-                    # Parse "task: ..., assigned_to: ..., due_date: ..."
-                    parts = line.split(", ")
-                    task = "Not specified"
-                    assigned_to = "Not specified" 
-                    due_date = "Not specified"
-                    
-                    for part in parts:
-                        if part.startswith("task:"):
-                            task = part.replace("task:", "").strip()
-                        elif part.startswith("assigned_to:"):
-                            assigned_to = part.replace("assigned_to:", "").strip()
-                        elif part.startswith("due_date:"):
-                            due_date = part.replace("due_date:", "").strip()
-                    
-                    if task != "Not specified":
-                        action_tasks.append({"task": task, "assigned_to": assigned_to, "due_date": due_date})
     
-    print(f"✅ Extracted {len(action_tasks)} action tasks")
+    # Extract from organized format
+    if "**🔹" in llm_output:
+        lines = llm_output.split("\n")
+        current_person = ""
+        
+        for line in lines:
+            if "**🔹" in line:
+                current_person = line.replace("**🔹", "").replace(":**", "").strip()
+            elif line.strip().startswith("•") and current_person:
+                task = line.strip("• ").strip()
+                if task and len(task) > 3:
+                    action_tasks.append({
+                        "task": task, 
+                        "assigned_to": current_person, 
+                        "due_date": "Not specified"
+                    })
+    
+    print(f"✅ Extracted {len(action_tasks)} organized action tasks")
     return {"action_tasks": action_tasks}

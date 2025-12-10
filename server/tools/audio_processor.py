@@ -176,19 +176,12 @@ async def _process_large_audio_file(file_path: str, processing_id: int, filename
                 todos_text = '\\n'.join([f"• {todo}" for todo in todos]) if todos else "No todos found"
                 actions_text = '\\n'.join([f"• {action.get('task', str(action)) if isinstance(action, dict) else str(action)}" for action in action_items]) if action_items else "No action items found"
                 
-                email_body = f"""Large Audio Processing Results for: {filename}
+                email_body = f"""🎧 Audio Processing Results for: {filename}
 
-TRANSCRIPT:
+{summary or '🎯 Audio processed successfully with enhanced summary'}
+
+📞 TRANSCRIPT:
 {transcription}
-
-ACTION ITEMS:
-{actions_text}
-
-TODO ITEMS:
-{todos_text}
-
-SUMMARY:
-{summary or 'Large audio file processed successfully'}
 
 Processing completed successfully!
 
@@ -298,19 +291,12 @@ async def _process_small_audio_file(file_path: str, processing_id: int, filename
                 todos_text = '\\n'.join([f"• {todo}" for todo in todos]) if todos else "No todos found"
                 actions_text = '\\n'.join([f"• {action.get('task', str(action)) if isinstance(action, dict) else str(action)}" for action in action_items]) if action_items else "No action items found"
                 
-                email_body = f"""Audio Processing Results for: {filename}
+                email_body = f"""🎧 Audio Processing Results for: {filename}
 
-TRANSCRIPT:
+{summary or '🎯 Audio processed successfully with enhanced summary'}
+
+📞 TRANSCRIPT:
 {transcription}
-
-ACTION ITEMS:
-{actions_text}
-
-TODO ITEMS:
-{todos_text}
-
-SUMMARY:
-{summary or 'Audio processed successfully'}
 
 Processing completed successfully!
 

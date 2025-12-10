@@ -78,7 +78,93 @@ class TodoTool:
         return "added"
 
     async def extract_todos_from_text(self, text: str) -> dict:
-        """Extract todos from text using LLM"""
+        """Extract todos from text using LLM with beautiful formatting"""
+        prompt = f"""
+Create a beautiful, organized summary from this transcription with person-specific assignments.
+
+Instructions:
+1. Identify all persons mentioned (names, roles)
+2. Group tasks and commitments by person
+3. Extract personal tasks for the speaker
+4. Use clean format with emojis
+
+Text: {text}
+
+Format:
+🎯 **MEETING SUMMARY**
+[Brief summary of main discussion and decisions]
+
+👥 **RESPONSIBILITIES BY PERSON**
+
+**👤 [Person Name]:**
+• [Their specific tasks]
+
+**👤 Speaker (You):**
+• [Your personal tasks]
+
+📋 **KEY DECISIONS**
+• [Important decisions]
+
+📌 **IMPORTANT DETAILS**
+• [Dates, deadlines, URLs, etc.]
+"""
+        
+        try:
+            llm_output = await call_llm(text, prompt)
+            print(f"✅ LLM Output: {llm_output}")
+        except Exception as e:
+            print(f"❌ LLM Error: {e}")
+            return {
+                "summary": f"Summary: {text[:100]}...",
+                "todos": []
+            }
+        
+        # Parse beautiful output
+        summary = ""
+        todos = []
+        
+        # Extract meeting summary
+        if "🎯 **MEETING SUMMARY**" in llm_output:
+            parts = llm_output.split("🎯 **MEETING SUMMARY**", 1)[1]
+            summary_part = parts.split("👥 **", 1)[0].strip()
+            summary = f"🎯 **MEETING SUMMARY**\n{summary_part}"
+        
+        # Add responsibilities section if exists
+        if "👥 **RESPONSIBILITIES BY PERSON**" in llm_output or "👥 **PERSON-SPECIFIC RESPONSIBILITIES**" in llm_output:
+            marker = "👥 **RESPONSIBILITIES BY PERSON**" if "👥 **RESPONSIBILITIES BY PERSON**" in llm_output else "👥 **PERSON-SPECIFIC RESPONSIBILITIES**"
+            parts = llm_output.split(marker, 1)[1]
+            resp_part = parts.split("📋 **", 1)[0].strip()
+            summary += f"\n\n👥 **RESPONSIBILITIES BY PERSON**\n{resp_part}"
+        
+        # Add decisions if exists
+        if "📋 **KEY DECISIONS" in llm_output:
+            parts = llm_output.split("📋 **KEY DECISIONS", 1)[1]
+            decisions_part = parts.split("📌 **", 1)[0].strip()
+            summary += f"\n\n📋 **KEY DECISIONS**{decisions_part}"
+        
+        # Add important details if exists
+        if "📌 **IMPORTANT DETAILS**" in llm_output:
+            parts = llm_output.split("📌 **IMPORTANT DETAILS**", 1)[1].strip()
+            summary += f"\n\n📌 **IMPORTANT DETAILS**\n{parts}"
+        
+        # Extract personal todos from Speaker section
+        if "**👤 Speaker" in llm_output:
+            speaker_text = llm_output.split("**👤 Speaker", 1)[1]
+            for line in speaker_text.split("\n"):
+                if line.strip().startswith("•"):
+                    todo = line.strip("• ").strip()
+                    if todo and len(todo) > 3:
+                        todos.append(todo)
+                        await self.add_todo(todo)
+        
+        if not summary:
+            summary = f"Meeting analysis: {text[:100]}..."
+        
+        print(f"✅ Generated beautiful summary with {len(todos)} personal todos")
+        return {
+            "summary": summary,
+            "todos": todos
+        }
         prompt = f"""
 You are an intelligent assistant that understands multiple languages including English, Hindi, Urdu, and others.
 From the following transcription, identify SPECIFIC PERSONS mentioned and their RELATED TASKS, COMMITMENTS, or DISCUSSIONS.
